@@ -21,7 +21,7 @@ const ExcelAIAnalyzer = () => {
   
   // Configuration
   const [apiKey, setApiKey] = useState('');
-  const [selectedModel, setSelectedModel] = useState('gpt-4o-mini-realtime-preview-2024-12-17');
+  const [selectedModel, setSelectedModel] = useState('gpt-4o-mini-2024-07-18');
   const [selectedInputColumns, setSelectedInputColumns] = useState([]);
   const [outputColumn, setOutputColumn] = useState('');
   const [analysisPrompt, setAnalysisPrompt] = useState('');
@@ -210,7 +210,7 @@ const ExcelAIAnalyzer = () => {
   const calculateCost = (usage, model) => {
     // Pricing per 1M tokens, so we divide by 1,000,000 to get per-token cost
     const pricing = {
-      'gpt-4o-mini-realtime-preview-2024-12-17': { input: 0.60 / 1000000, cached: 0.30 / 1000000, output: 2.40 / 1000000 },
+      'gpt-4o-mini-2024-07-18': { input: 0.60 / 1000000, cached: 0.30 / 1000000, output: 2.40 / 1000000 },
       'gpt-5-nano-2025-08-07': { input: 0.05 / 1000000, cached: 0.005 / 1000000, output: 0.40 / 1000000 },
       'gpt-5-mini-2025-08-07': { input: 0.25 / 1000000, cached: 0.025 / 1000000, output: 2.00 / 1000000 },
       'o4-mini-2025-04-16': { input: 1.10 / 1000000, cached: 0.275 / 1000000, output: 4.40 / 1000000 },
@@ -385,7 +385,7 @@ const ExcelAIAnalyzer = () => {
     setOutputColumn('');
     setAnalysisPrompt('');
     setCustomOutputColumn('');
-    setSelectedModel('gpt-4o-mini-realtime-preview-2024-12-17');
+    setSelectedModel('gpt-4o-mini-2024-07-18');
     setIsProcessing(false);
     setIsPaused(false);
     setProgress({ current: 0, total: 0 });

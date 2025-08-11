@@ -22,7 +22,7 @@ const Configuration = ({
   
   const getCostInfo = (model) => {
     const costs = {
-      'gpt-4o-mini-realtime-preview-2024-12-17': {
+      'gpt-4o-mini-2024-07-18': {
         name: '4o-mini',
         input: '$0.60',
         cached: '$0.30',
@@ -113,7 +113,7 @@ const Configuration = ({
                   <div className="text-center">
                     <p className="font-medium mb-3">Pricing (per 1M tokens)</p>
                     <div className="space-y-3">
-                      {['gpt-4o-mini-realtime-preview-2024-12-17', 'gpt-5-nano-2025-08-07', 'gpt-5-mini-2025-08-07', 'o4-mini-2025-04-16', 'gpt-4.1-2025-04-14'].map(model => {
+                      {['gpt-4o-mini-2024-07-18', 'gpt-5-nano-2025-08-07', 'gpt-5-mini-2025-08-07', 'o4-mini-2025-04-16', 'gpt-4.1-2025-04-14'].map(model => {
                         const cost = getCostInfo(model);
                         return (
                           <div key={model} className={`p-2 rounded ${selectedModel === model ? 'bg-indigo-600' : 'bg-gray-700'}`}>
@@ -138,7 +138,7 @@ const Configuration = ({
             onChange={(e) => setSelectedModel(e.target.value)}
             className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
           >
-            <option value="gpt-4o-mini-realtime-preview-2024-12-17">4o-mini (Fastest)</option>
+            <option value="gpt-4o-mini-2024-07-18">4o-mini (Fastest)</option>
             <option value="gpt-5-nano-2025-08-07">GPT-5 Nano (Most Affordable)</option>
             <option value="gpt-5-mini-2025-08-07">GPT-5 Mini (Balanced)</option>
             <option value="o4-mini-2025-04-16">o4-mini (Advanced Reasoning)</option>

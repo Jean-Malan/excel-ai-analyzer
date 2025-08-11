@@ -139,7 +139,7 @@ const ProcessingPanel = ({
               <div className="mt-1 text-xs text-green-500">
                 Using {(() => {
                   const names = {
-                    'gpt-4o-mini-realtime-preview-2024-12-17': '4o-mini (Fastest)',
+                    'gpt-4o-mini-2024-07-18': '4o-mini (Fastest)',
                     'gpt-5-nano-2025-08-07': 'GPT-5 Nano',
                     'gpt-5-mini-2025-08-07': 'GPT-5 Mini',
                     'o4-mini-2025-04-16': 'o4-mini',
