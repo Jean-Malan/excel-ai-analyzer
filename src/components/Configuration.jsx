@@ -19,6 +19,7 @@ const Configuration = ({
 }) => {
   const [showTooltip, setShowTooltip] = useState(false);
   const [showCostTooltip, setShowCostTooltip] = useState(false);
+  const [showApiKeyTooltip, setShowApiKeyTooltip] = useState(false);
   
   const getCostInfo = (model) => {
     const costs = {
@@ -73,9 +74,38 @@ const Configuration = ({
       <div className="space-y-4">
         {/* API Key */}
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
-            OpenAI API Key *
-          </label>
+          <div className="flex items-center mb-1">
+            <label className="block text-sm font-medium text-gray-700">
+              OpenAI API Key *
+            </label>
+            <div className="relative ml-2">
+              <button
+                type="button"
+                onMouseEnter={() => setShowApiKeyTooltip(true)}
+                onMouseLeave={() => setShowApiKeyTooltip(false)}
+                className="text-gray-400 hover:text-gray-600 transition-colors"
+              >
+                <HelpCircle className="w-4 h-4" />
+              </button>
+              
+              {showApiKeyTooltip && (
+                <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-3 py-2 bg-gray-900 text-white text-xs rounded-lg shadow-lg z-10 w-80">
+                  <div className="text-center">
+                    <p className="font-medium mb-2">How to get your OpenAI API key:</p>
+                    <div className="text-left space-y-1">
+                      <p>1. Go to <span className="font-medium text-blue-300">platform.openai.com</span></p>
+                      <p>2. Sign up or log in to your account</p>
+                      <p>3. Click "API keys" in the left sidebar</p>
+                      <p>4. Click "Create new secret key"</p>
+                      <p>5. Copy the key that starts with "sk-"</p>
+                    </div>
+                    <p className="mt-2 text-gray-300">⚠️ Your key is run locally only and never stored or shared</p>
+                  </div>
+                  <div className="absolute top-full left-1/2 transform -translate-x-1/2 border-4 border-transparent border-t-gray-900"></div>
+                </div>
+              )}
+            </div>
+          </div>
           <input
             type="password"
             value={apiKey}
