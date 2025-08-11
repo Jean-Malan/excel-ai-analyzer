@@ -1,0 +1,131 @@
+import React from 'react';
+import { Play, Pause, Download, AlertCircle, Info } from 'lucide-react';
+
+const ProcessingPanel = ({
+  file,
+  apiKey,
+  selectedInputColumns,
+  analysisPrompt,
+  outputColumn,
+  isProcessing,
+  progress,
+  onStartProcessing,
+  onPauseProcessing,
+  errors,
+  currentStep,
+  setCurrentStep,
+  onDownloadResults
+}) => {
+  if (!file) return null;
+
+  const progressPercentage = progress.total > 0 ? (progress.current / progress.total) * 100 : 0;
+  const canStartProcessing = apiKey && selectedInputColumns.length > 0 && analysisPrompt && outputColumn;
+
+  return (
+    <div className="space-y-6">
+      {/* Processing Section */}
+      {(apiKey || selectedInputColumns.length > 0 || analysisPrompt || outputColumn) && (
+        <div className="bg-white rounded-lg shadow-md p-6">
+          <h2 className="text-xl font-semibold mb-4 flex items-center">
+            <Play className="w-5 h-5 mr-2" />
+            3. Process Data
+          </h2>
+          
+          {!isProcessing && progress.current === 0 ? (
+            <button
+              onClick={() => {
+                setCurrentStep(3);
+                onStartProcessing();
+              }}
+              disabled={!canStartProcessing}
+              className="w-full bg-indigo-600 hover:bg-indigo-700 disabled:bg-gray-400 text-white py-2 px-4 rounded-md font-medium transition-colors"
+            >
+              Start Analysis
+            </button>
+          ) : (
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <span className="text-sm font-medium">
+                  Progress: {progress.current} / {progress.total}
+                </span>
+                <span className="text-sm text-gray-500">
+                  {progressPercentage.toFixed(1)}%
+                </span>
+              </div>
+              
+              <div className="w-full bg-gray-200 rounded-full h-2">
+                <div 
+                  className="bg-indigo-600 h-2 rounded-full transition-all duration-300"
+                  style={{ width: `${progressPercentage}%` }}
+                />
+              </div>
+              
+              <div className="flex space-x-2">
+                {isProcessing ? (
+                  <button
+                    onClick={onPauseProcessing}
+                    className="flex-1 bg-yellow-600 hover:bg-yellow-700 text-white py-2 px-4 rounded-md font-medium transition-colors flex items-center justify-center"
+                  >
+                    <Pause className="w-4 h-4 mr-2" />
+                    Pause
+                  </button>
+                ) : progress.current > 0 && progress.current < progress.total ? (
+                  <button
+                    onClick={onStartProcessing}
+                    className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white py-2 px-4 rounded-md font-medium transition-colors flex items-center justify-center"
+                  >
+                    <Play className="w-4 h-4 mr-2" />
+                    Resume
+                  </button>
+                ) : null}
+              </div>
+            </div>
+          )}
+
+          {errors.length > 0 && (
+            <div className="mt-4 p-3 bg-red-50 border border-red-200 rounded-md">
+              <div className="flex items-center mb-2">
+                <AlertCircle className="w-4 h-4 text-red-500 mr-2" />
+                <span className="font-medium text-red-700">Errors:</span>
+              </div>
+              <div className="text-sm text-red-600 max-h-20 overflow-y-auto">
+                {errors.map((error, index) => (
+                  <div key={index}>{error}</div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Download Section */}
+      {currentStep >= 4 && (
+        <div className="bg-white rounded-lg shadow-md p-6">
+          <h2 className="text-xl font-semibold mb-4 flex items-center">
+            <Download className="w-5 h-5 mr-2" />
+            4. Download Results
+          </h2>
+          
+          <button
+            onClick={onDownloadResults}
+            className="w-full bg-green-600 hover:bg-green-700 text-white py-2 px-4 rounded-md font-medium transition-colors flex items-center justify-center"
+          >
+            <Download className="w-4 h-4 mr-2" />
+            Download Analyzed File
+          </button>
+          
+          <div className="mt-3 p-3 bg-blue-50 border border-blue-200 rounded-md">
+            <div className="flex items-center">
+              <Info className="w-4 h-4 text-blue-500 mr-2" />
+              <span className="text-sm text-blue-700">
+                Your original file with AI analysis results will be downloaded
+              </span>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+export default ProcessingPanel;
