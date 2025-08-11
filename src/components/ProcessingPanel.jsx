@@ -1,5 +1,5 @@
 import React from 'react';
-import { Play, Pause, Download, AlertCircle, Info } from 'lucide-react';
+import { Play, Pause, Download, AlertCircle, Info, DollarSign, RefreshCw, SkipForward } from 'lucide-react';
 
 const ProcessingPanel = ({
   file,
@@ -10,11 +10,15 @@ const ProcessingPanel = ({
   isProcessing,
   progress,
   onStartProcessing,
+  onRerunProcessing,
+  onResumeProcessing,
   onPauseProcessing,
   errors,
   currentStep,
   setCurrentStep,
-  onDownloadResults
+  onDownloadResults,
+  totalCost,
+  selectedModel
 }) => {
   if (!file) return null;
 
@@ -42,6 +46,42 @@ const ProcessingPanel = ({
             >
               Start Analysis
             </button>
+          ) : !isProcessing && progress.current > 0 && progress.current < progress.total ? (
+            <div className="space-y-2">
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  onClick={onResumeProcessing}
+                  className="bg-indigo-600 hover:bg-indigo-700 text-white py-2 px-4 rounded-md font-medium transition-colors flex items-center justify-center"
+                >
+                  <Play className="w-4 h-4 mr-2" />
+                  Resume
+                </button>
+                <button
+                  onClick={onRerunProcessing}
+                  className="bg-green-600 hover:bg-green-700 text-white py-2 px-4 rounded-md font-medium transition-colors flex items-center justify-center"
+                >
+                  <RefreshCw className="w-4 h-4 mr-2" />
+                  Rerun All
+                </button>
+              </div>
+              <button
+                onClick={onDownloadResults}
+                className="w-full bg-blue-600 hover:bg-blue-700 text-white py-2 px-4 rounded-md font-medium transition-colors flex items-center justify-center"
+              >
+                <Download className="w-4 h-4 mr-2" />
+                Download Current Progress
+              </button>
+            </div>
+          ) : progress.current >= progress.total && !isProcessing ? (
+            <div className="space-y-2">
+              <button
+                onClick={onRerunProcessing}
+                className="w-full bg-green-600 hover:bg-green-700 text-white py-2 px-4 rounded-md font-medium transition-colors flex items-center justify-center"
+              >
+                <RefreshCw className="w-4 h-4 mr-2" />
+                Rerun with New Settings
+              </button>
+            </div>
           ) : (
             <div className="space-y-4">
               <div className="flex items-center justify-between">
@@ -61,23 +101,52 @@ const ProcessingPanel = ({
               </div>
               
               <div className="flex space-x-2">
-                {isProcessing ? (
+                {isProcessing && (
                   <button
                     onClick={onPauseProcessing}
-                    className="flex-1 bg-yellow-600 hover:bg-yellow-700 text-white py-2 px-4 rounded-md font-medium transition-colors flex items-center justify-center"
+                    className="w-full bg-yellow-600 hover:bg-yellow-700 text-white py-2 px-4 rounded-md font-medium transition-colors flex items-center justify-center"
                   >
                     <Pause className="w-4 h-4 mr-2" />
-                    Pause
+                    Pause Processing
                   </button>
-                ) : progress.current > 0 && progress.current < progress.total ? (
-                  <button
-                    onClick={onStartProcessing}
-                    className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white py-2 px-4 rounded-md font-medium transition-colors flex items-center justify-center"
-                  >
-                    <Play className="w-4 h-4 mr-2" />
-                    Resume
-                  </button>
-                ) : null}
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Cost Display */}
+          {totalCost.total > 0 && (
+            <div className="mt-4 p-3 bg-green-50 border border-green-200 rounded-md">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center">
+                  <DollarSign className="w-4 h-4 text-green-500 mr-2" />
+                  <span className="font-medium text-green-700">Processing Cost</span>
+                </div>
+                <div className="text-right">
+                  <div className="text-lg font-bold text-green-700">
+                    ${totalCost.total.toFixed(6)}
+                  </div>
+                  <div className="text-xs text-green-600">
+                    {progress.current} rows processed
+                  </div>
+                </div>
+              </div>
+              <div className="mt-2 grid grid-cols-3 gap-2 text-xs text-green-600">
+                <div>Input: ${totalCost.input.toFixed(6)}</div>
+                <div>Cached: ${totalCost.cached.toFixed(6)}</div>
+                <div>Output: ${totalCost.output.toFixed(6)}</div>
+              </div>
+              <div className="mt-1 text-xs text-green-500">
+                Using {(() => {
+                  const names = {
+                    'gpt-4o-mini-realtime-preview-2024-12-17': '4o-mini (Fastest)',
+                    'gpt-5-nano-2025-08-07': 'GPT-5 Nano',
+                    'gpt-5-mini-2025-08-07': 'GPT-5 Mini',
+                    'o4-mini-2025-04-16': 'o4-mini',
+                    'gpt-4.1-2025-04-14': 'GPT-4.1'
+                  };
+                  return names[selectedModel] || selectedModel;
+                })()}
               </div>
             </div>
           )}

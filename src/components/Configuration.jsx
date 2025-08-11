@@ -1,10 +1,12 @@
 import React, { useState } from 'react';
-import { Settings, CheckCircle, HelpCircle } from 'lucide-react';
+import { Settings, CheckCircle, HelpCircle, DollarSign } from 'lucide-react';
 
 const Configuration = ({
   file,
   apiKey,
   setApiKey,
+  selectedModel,
+  setSelectedModel,
   headers,
   selectedInputColumns,
   onToggleColumnSelection,
@@ -16,6 +18,48 @@ const Configuration = ({
   setAnalysisPrompt
 }) => {
   const [showTooltip, setShowTooltip] = useState(false);
+  const [showCostTooltip, setShowCostTooltip] = useState(false);
+  
+  const getCostInfo = (model) => {
+    const costs = {
+      'gpt-4o-mini-realtime-preview-2024-12-17': {
+        name: '4o-mini',
+        input: '$0.60',
+        cached: '$0.30',
+        output: '$2.40',
+        description: 'Fastest processing speed'
+      },
+      'gpt-5-nano-2025-08-07': {
+        name: 'GPT-5 Nano',
+        input: '$0.05',
+        cached: '$0.005',
+        output: '$0.40',
+        description: 'Most affordable option'
+      },
+      'gpt-5-mini-2025-08-07': {
+        name: 'GPT-5 Mini',
+        input: '$0.25',
+        cached: '$0.025',
+        output: '$2.00',
+        description: 'Good value for quality'
+      },
+      'o4-mini-2025-04-16': {
+        name: 'o4-mini',
+        input: '$1.10',
+        cached: '$0.275',
+        output: '$4.40',
+        description: 'Premium reasoning model'
+      },
+      'gpt-4.1-2025-04-14': {
+        name: 'GPT-4.1',
+        input: '$2.00',
+        cached: '$0.50',
+        output: '$8.00',
+        description: 'Highest quality, highest cost'
+      }
+    };
+    return costs[model];
+  };
   
   if (!file) return null;
 
@@ -45,6 +89,68 @@ const Configuration = ({
               <span className="font-medium">SECURE:</span>
               <span className="ml-1 text-xs">Your API key is only used locally in your browser and is NEVER stored, saved, or transmitted to any server other than OpenAI directly.</span>
             </div>
+          </div>
+        </div>
+
+        {/* Model Selection */}
+        <div className="relative">
+          <div className="flex items-center mb-1">
+            <label className="block text-sm font-medium text-gray-700">
+              AI Model *
+            </label>
+            <div className="relative ml-2">
+              <button
+                type="button"
+                onMouseEnter={() => setShowCostTooltip(true)}
+                onMouseLeave={() => setShowCostTooltip(false)}
+                className="text-gray-400 hover:text-gray-600 transition-colors"
+              >
+                <DollarSign className="w-4 h-4" />
+              </button>
+              
+              {showCostTooltip && (
+                <div className="ml-8 pl-8 absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-4 py-3 bg-gray-900 text-white text-xs rounded-lg shadow-lg z-20 w-96">
+                  <div className="text-center">
+                    <p className="font-medium mb-3">Pricing (per 1M tokens)</p>
+                    <div className="space-y-3">
+                      {['gpt-4o-mini-realtime-preview-2024-12-17', 'gpt-5-nano-2025-08-07', 'gpt-5-mini-2025-08-07', 'o4-mini-2025-04-16', 'gpt-4.1-2025-04-14'].map(model => {
+                        const cost = getCostInfo(model);
+                        return (
+                          <div key={model} className={`p-2 rounded ${selectedModel === model ? 'bg-indigo-600' : 'bg-gray-700'}`}>
+                            <div className="font-medium text-sm">{cost.name}</div>
+                            <div className="text-xs text-gray-300 mt-1">
+                              Input: {cost.input} • Cached: {cost.cached} • Output: {cost.output}
+                            </div>
+                            <div className="text-xs text-gray-400 italic">{cost.description}</div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                    <p className="mt-3 text-gray-300 text-xs">Hover over $ to see pricing details</p>
+                  </div>
+                  <div className="absolute top-full left-1/2 transform -translate-x-1/2 border-4 border-transparent border-t-gray-900"></div>
+                </div>
+              )}
+            </div>
+          </div>
+          <select
+            value={selectedModel}
+            onChange={(e) => setSelectedModel(e.target.value)}
+            className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
+          >
+            <option value="gpt-4o-mini-realtime-preview-2024-12-17">4o-mini (Fastest)</option>
+            <option value="gpt-5-nano-2025-08-07">GPT-5 Nano (Most Affordable)</option>
+            <option value="gpt-5-mini-2025-08-07">GPT-5 Mini (Balanced)</option>
+            <option value="o4-mini-2025-04-16">o4-mini (Advanced Reasoning)</option>
+            <option value="gpt-4.1-2025-04-14">GPT-4.1 (Most Capable)</option>
+          </select>
+          <div className="flex items-center justify-between mt-1">
+            <p className="text-xs text-gray-500">
+              Choose based on your needs • Currently selected: {getCostInfo(selectedModel).name}
+            </p>
+            <p className="text-xs text-green-600 font-medium">
+              {getCostInfo(selectedModel).description}
+            </p>
           </div>
         </div>
 
@@ -79,7 +185,7 @@ const Configuration = ({
             className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm mb-2"
           >
             <option value="">Select output column...</option>
-            <option value="new">Create new column</option>
+            <option value="new">+ Create new column</option>
             {headers.map((header, index) => (
               <option key={index} value={index}>
                 {header || `Column ${index + 1}`}

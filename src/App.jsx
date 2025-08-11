@@ -9,6 +9,7 @@ import Configuration from './components/Configuration';
 import ProcessingPanel from './components/ProcessingPanel';
 import DataPreview from './components/DataPreview';
 import PasteModal from './components/PasteModal';
+import SupportModal from './components/SupportModal';
 
 const ExcelAIAnalyzer = () => {
   const [file, setFile] = useState(null);
@@ -20,6 +21,7 @@ const ExcelAIAnalyzer = () => {
   
   // Configuration
   const [apiKey, setApiKey] = useState('');
+  const [selectedModel, setSelectedModel] = useState('gpt-4o-mini-realtime-preview-2024-12-17');
   const [selectedInputColumns, setSelectedInputColumns] = useState([]);
   const [outputColumn, setOutputColumn] = useState('');
   const [analysisPrompt, setAnalysisPrompt] = useState('');
@@ -31,6 +33,8 @@ const ExcelAIAnalyzer = () => {
   const [progress, setProgress] = useState({ current: 0, total: 0 });
   const [processedData, setProcessedData] = useState([]);
   const [errors, setErrors] = useState([]);
+  const [totalCost, setTotalCost] = useState({ input: 0, output: 0, cached: 0, total: 0 });
+  const [costPerRow, setCostPerRow] = useState([]);
   
   // Current step
   const [currentStep, setCurrentStep] = useState(1);
@@ -38,6 +42,9 @@ const ExcelAIAnalyzer = () => {
   // Paste mode
   const [showPasteMode, setShowPasteMode] = useState(false);
   const [pasteData, setPasteData] = useState('');
+  
+  // Support modal
+  const [showSupportModal, setShowSupportModal] = useState(false);
   
   // Track if user manually reset to prevent auto-reload in development
   const [wasReset, setWasReset] = useState(false);
@@ -200,6 +207,40 @@ const ExcelAIAnalyzer = () => {
     );
   };
 
+  const calculateCost = (usage, model) => {
+    // Pricing per 1M tokens, so we divide by 1,000,000 to get per-token cost
+    const pricing = {
+      'gpt-4o-mini-realtime-preview-2024-12-17': { input: 0.60 / 1000000, cached: 0.30 / 1000000, output: 2.40 / 1000000 },
+      'gpt-5-nano-2025-08-07': { input: 0.05 / 1000000, cached: 0.005 / 1000000, output: 0.40 / 1000000 },
+      'gpt-5-mini-2025-08-07': { input: 0.25 / 1000000, cached: 0.025 / 1000000, output: 2.00 / 1000000 },
+      'o4-mini-2025-04-16': { input: 1.10 / 1000000, cached: 0.275 / 1000000, output: 4.40 / 1000000 },
+      'gpt-4.1-2025-04-14': { input: 2.00 / 1000000, cached: 0.50 / 1000000, output: 8.00 / 1000000 }
+    };
+
+    const rates = pricing[model];
+    const inputTokens = usage.prompt_tokens - (usage.prompt_tokens_details?.cached_tokens || 0);
+    const cachedTokens = usage.prompt_tokens_details?.cached_tokens || 0;
+    const outputTokens = usage.completion_tokens;
+
+    const inputCost = inputTokens * rates.input;
+    const cachedCost = cachedTokens * rates.cached;
+    const outputCost = outputTokens * rates.output;
+    const totalCost = inputCost + cachedCost + outputCost;
+
+    return {
+      inputCost: inputCost,
+      cachedCost: cachedCost,
+      outputCost: outputCost,
+      totalCost: totalCost,
+      tokens: {
+        input: inputTokens,
+        cached: cachedTokens,
+        output: outputTokens,
+        total: usage.total_tokens
+      }
+    };
+  };
+
   const callOpenAI = async (inputData, prompt) => {
     const response = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
@@ -208,15 +249,13 @@ const ExcelAIAnalyzer = () => {
         'Authorization': `Bearer ${apiKey}`
       },
       body: JSON.stringify({
-        model: 'gpt-4',
+        model: selectedModel,
         messages: [
           {
             role: 'user',
             content: `${prompt}\n\nData to analyze: ${inputData}`
           }
         ],
-        temperature: 0.3,
-        max_tokens: 500
       })
     });
 
@@ -225,10 +264,13 @@ const ExcelAIAnalyzer = () => {
     }
 
     const data = await response.json();
-    return data.choices[0].message.content.trim();
+    return {
+      content: data.choices[0].message.content.trim(),
+      usage: data.usage
+    };
   };
 
-  const startProcessing = async () => {
+  const startProcessing = async (resumeFromRow = 0) => {
     if (!apiKey || selectedInputColumns.length === 0 || !analysisPrompt || !outputColumn) {
       alert('Please fill in all required fields');
       return;
@@ -237,7 +279,15 @@ const ExcelAIAnalyzer = () => {
     setIsProcessing(true);
     setIsPaused(false);
     setErrors([]);
-    setProgress({ current: 0, total: sheetData.length });
+    
+    // Only reset progress and costs if starting from beginning
+    if (resumeFromRow === 0) {
+      setProgress({ current: 0, total: sheetData.length });
+      setTotalCost({ input: 0, output: 0, cached: 0, total: 0 });
+      setCostPerRow([]);
+    } else {
+      setProgress(prev => ({ ...prev, current: resumeFromRow }));
+    }
 
     const outputColIndex = outputColumn === 'new' 
       ? headers.length 
@@ -251,7 +301,7 @@ const ExcelAIAnalyzer = () => {
 
     const updatedData = [...processedData];
 
-    for (let i = 0; i < sheetData.length; i++) {
+    for (let i = resumeFromRow; i < sheetData.length; i++) {
       if (isPaused) break;
 
       try {
@@ -261,14 +311,24 @@ const ExcelAIAnalyzer = () => {
           .join('\n');
 
         if (inputData.trim()) {
-          const analysis = await callOpenAI(inputData, analysisPrompt);
+          const result = await callOpenAI(inputData, analysisPrompt);
+          const cost = calculateCost(result.usage, selectedModel);
           
           // Ensure row has enough columns
           while (updatedData[i].length <= outputColIndex) {
             updatedData[i].push('');
           }
           
-          updatedData[i][outputColIndex] = analysis;
+          updatedData[i][outputColIndex] = result.content;
+          
+          // Update cost tracking
+          setCostPerRow(prev => [...prev, { row: i + 1, cost }]);
+          setTotalCost(prev => ({
+            input: prev.input + cost.inputCost,
+            output: prev.output + cost.outputCost,
+            cached: prev.cached + cost.cachedCost,
+            total: prev.total + cost.totalCost
+          }));
         }
 
         setProgress({ current: i + 1, total: sheetData.length });
@@ -292,6 +352,16 @@ const ExcelAIAnalyzer = () => {
     setIsProcessing(false);
   };
 
+  const rerunProcessing = async () => {
+    // Rerun from the beginning with current settings
+    await startProcessing(0);
+  };
+
+  const resumeProcessing = async () => {
+    // Resume from where we left off
+    await startProcessing(progress.current);
+  };
+
   const downloadResults = () => {
     const ws = XLSX.utils.aoa_to_sheet([headers, ...processedData]);
     const wb = XLSX.utils.book_new();
@@ -299,6 +369,9 @@ const ExcelAIAnalyzer = () => {
     
     const fileName = file.name.replace(/\.[^/.]+$/, '') + '_analyzed.xlsx';
     XLSX.writeFile(wb, fileName);
+    
+    // Show support modal after download
+    setShowSupportModal(true);
   };
 
   const resetTool = () => {
@@ -312,6 +385,7 @@ const ExcelAIAnalyzer = () => {
     setOutputColumn('');
     setAnalysisPrompt('');
     setCustomOutputColumn('');
+    setSelectedModel('gpt-4o-mini-realtime-preview-2024-12-17');
     setIsProcessing(false);
     setIsPaused(false);
     setProgress({ current: 0, total: 0 });
@@ -321,6 +395,8 @@ const ExcelAIAnalyzer = () => {
     setShowPasteMode(false);
     setPasteData('');
     setWasReset(true);
+    setTotalCost({ input: 0, output: 0, cached: 0, total: 0 });
+    setCostPerRow([]);
   };
 
   return (
@@ -365,6 +441,8 @@ const ExcelAIAnalyzer = () => {
               file={file}
               apiKey={apiKey}
               setApiKey={setApiKey}
+              selectedModel={selectedModel}
+              setSelectedModel={setSelectedModel}
               headers={headers}
               selectedInputColumns={selectedInputColumns}
               onToggleColumnSelection={toggleColumnSelection}
@@ -386,11 +464,15 @@ const ExcelAIAnalyzer = () => {
               isProcessing={isProcessing}
               progress={progress}
               onStartProcessing={startProcessing}
+              onRerunProcessing={rerunProcessing}
+              onResumeProcessing={resumeProcessing}
               onPauseProcessing={pauseProcessing}
               errors={errors}
               currentStep={currentStep}
               setCurrentStep={setCurrentStep}
               onDownloadResults={downloadResults}
+              totalCost={totalCost}
+              selectedModel={selectedModel}
             />
           </div>
 
@@ -416,6 +498,12 @@ const ExcelAIAnalyzer = () => {
             setShowPasteMode(false);
             setPasteData('');
           }}
+        />
+
+        {/* Support Modal */}
+        <SupportModal
+          show={showSupportModal}
+          onClose={() => setShowSupportModal(false)}
         />
       </div>
     </div>
