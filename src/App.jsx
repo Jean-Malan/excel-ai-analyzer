@@ -1,5 +1,5 @@
 import React, { useState, useCallback, useEffect } from 'react';
-import { Brain, RotateCcw } from 'lucide-react';
+import { Brain, RotateCcw, HelpCircle } from 'lucide-react';
 import * as XLSX from 'xlsx';
 
 // Import components
@@ -10,6 +10,7 @@ import ProcessingPanel from './components/ProcessingPanel';
 import DataPreview from './components/DataPreview';
 import PasteModal from './components/PasteModal';
 import SupportModal from './components/SupportModal';
+import TutorialModal from './components/TutorialModal';
 
 const ExcelAIAnalyzer = () => {
   const [file, setFile] = useState(null);
@@ -45,6 +46,9 @@ const ExcelAIAnalyzer = () => {
   
   // Support modal
   const [showSupportModal, setShowSupportModal] = useState(false);
+  
+  // Tutorial modal
+  const [showTutorialModal, setShowTutorialModal] = useState(false);
   
   // Track if user manually reset to prevent auto-reload in development
   const [wasReset, setWasReset] = useState(false);
@@ -409,15 +413,25 @@ const ExcelAIAnalyzer = () => {
           </div>
           <p className="text-lg text-gray-600">Upload your Excel file and let AI analyze your data</p>
           
-          {/* Always visible reset button */}
-          <button
-            onClick={resetTool}
-            className="absolute top-0 right-0 bg-gray-600 hover:bg-gray-700 text-white py-2 px-4 rounded-lg font-medium transition-colors flex items-center"
-            title="Reset everything and start over"
-          >
-            <RotateCcw className="w-4 h-4 mr-2" />
-            Reset
-          </button>
+          {/* Header buttons */}
+          <div className="absolute top-0 right-0 flex space-x-2">
+            <button
+              onClick={() => setShowTutorialModal(true)}
+              className="bg-indigo-600 hover:bg-indigo-700 text-white py-2 px-4 rounded-lg font-medium transition-colors flex items-center"
+              title="How to use this tool"
+            >
+              <HelpCircle className="w-4 h-4 mr-2" />
+              Help
+            </button>
+            <button
+              onClick={resetTool}
+              className="bg-gray-600 hover:bg-gray-700 text-white py-2 px-4 rounded-lg font-medium transition-colors flex items-center"
+              title="Reset everything and start over"
+            >
+              <RotateCcw className="w-4 h-4 mr-2" />
+              Reset
+            </button>
+          </div>
         </div>
 
         {/* Progress Steps */}
@@ -506,6 +520,12 @@ const ExcelAIAnalyzer = () => {
         <SupportModal
           show={showSupportModal}
           onClose={() => setShowSupportModal(false)}
+        />
+
+        {/* Tutorial Modal */}
+        <TutorialModal
+          isOpen={showTutorialModal}
+          onClose={() => setShowTutorialModal(false)}
         />
       </div>
     </div>
