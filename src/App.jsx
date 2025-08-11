@@ -477,15 +477,17 @@ const ExcelAIAnalyzer = () => {
           </div>
 
           {/* Data Preview */}
-          <div className="lg:col-span-2">
-            <DataPreview
-              sheetData={sheetData}
-              headers={headers}
-              processedData={processedData}
-              selectedInputColumns={selectedInputColumns}
-              outputColumn={outputColumn}
-            />
-          </div>
+          {(file || (import.meta.env.VITE_ENVIRONMENT === 'development' && sheetData.length > 0)) && (
+            <div className="lg:col-span-2">
+              <DataPreview
+                sheetData={sheetData}
+                headers={headers}
+                processedData={processedData}
+                selectedInputColumns={selectedInputColumns}
+                outputColumn={outputColumn}
+              />
+            </div>
+          )}
         </div>
 
         {/* Paste Data Modal */}
