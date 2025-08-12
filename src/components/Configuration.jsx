@@ -65,12 +65,14 @@ const Configuration = ({
   if (!file) return null;
 
   return (
-    <div className="space-y-3 sm:space-y-4">
+    <div className="space-y-4 sm:space-y-6">
       {/* AI Configuration Card */}
-      <div className="bg-white rounded-lg shadow-md p-4 sm:p-6">
-        <h2 className="text-lg sm:text-xl font-semibold mb-3 sm:mb-4 flex items-center">
-          <Settings className="w-4 h-4 sm:w-5 sm:h-5 mr-2" />
-          2. AI Configuration
+      <div className="bg-white/70 backdrop-blur-sm border border-gray-200/50 rounded-2xl shadow-sm hover:shadow-md transition-all duration-200 p-6">
+        <h2 className="text-lg sm:text-xl font-semibold mb-4 flex items-center text-gray-900">
+          <div className="w-8 h-8 bg-gray-100 rounded-lg flex items-center justify-center mr-3">
+            <Settings className="w-4 h-4 text-gray-700" />
+          </div>
+          AI Configuration
         </h2>
         
         <div className="space-y-4">
@@ -113,7 +115,7 @@ const Configuration = ({
               value={apiKey}
               onChange={(e) => setApiKey(e.target.value)}
               placeholder="sk-..."
-              className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
+              className="w-full px-4 py-3 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-violet-500 focus:border-transparent transition-all duration-200 bg-white/50"
             />
             <div className="mt-2 p-2 bg-green-50 border border-green-200 rounded-md">
               <div className="flex items-center text-sm text-green-700">
@@ -168,7 +170,7 @@ const Configuration = ({
             <select
               value={selectedModel}
               onChange={(e) => setSelectedModel(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
+              className="w-full px-4 py-3 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-violet-500 focus:border-transparent transition-all duration-200 bg-white/50"
             >
               <option value="gpt-4o-mini-2024-07-18">4o-mini (Fastest)</option>
               <option value="gpt-5-nano-2025-08-07">GPT-5 Nano (Most Affordable)</option>
@@ -189,9 +191,11 @@ const Configuration = ({
       </div>
 
       {/* Data Selection Card */}
-      <div className="bg-white rounded-lg shadow-md p-4 sm:p-6">
-        <h3 className="text-lg font-semibold mb-3 sm:mb-4 flex items-center">
-          <CheckCircle className="w-4 h-4 sm:w-5 sm:h-5 mr-2" />
+      <div className="bg-white/70 backdrop-blur-sm border border-gray-200/50 rounded-2xl shadow-sm hover:shadow-md transition-all duration-200 p-6">
+        <h3 className="text-lg font-semibold mb-4 flex items-center text-gray-900">
+          <div className="w-8 h-8 bg-gray-100 rounded-lg flex items-center justify-center mr-3">
+            <CheckCircle className="w-4 h-4 text-gray-700" />
+          </div>
           Data Selection
         </h3>
         
@@ -249,7 +253,7 @@ const Configuration = ({
             <select
               value={outputColumn}
               onChange={(e) => setOutputColumn(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm mb-2"
+              className="w-full px-4 py-3 border border-gray-200 rounded-xl text-sm mb-2 focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all duration-200 bg-white/50"
             >
               <option value="">Select output column...</option>
               <option value="new">+ Create new column</option>
@@ -266,7 +270,7 @@ const Configuration = ({
                 value={customOutputColumn}
                 onChange={(e) => setCustomOutputColumn(e.target.value)}
                 placeholder="Enter column name..."
-                className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
+                className="w-full px-4 py-3 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all duration-200 bg-white/50"
               />
             )}
           </div>
@@ -274,9 +278,11 @@ const Configuration = ({
       </div>
 
       {/* Analysis Instructions Card */}
-      <div className="bg-white rounded-lg shadow-md p-4 sm:p-6">
-        <h3 className="text-lg font-semibold mb-3 sm:mb-4 flex items-center">
-          <Brain className="w-4 h-4 sm:w-5 sm:h-5 mr-2" />
+      <div className="bg-white/70 backdrop-blur-sm border border-gray-200/50 rounded-2xl shadow-sm hover:shadow-md transition-all duration-200 p-6">
+        <h3 className="text-lg font-semibold mb-4 flex items-center text-gray-900">
+          <div className="w-8 h-8 bg-gray-100 rounded-lg flex items-center justify-center mr-3">
+            <Brain className="w-4 h-4 text-gray-700" />
+          </div>
           Analysis Instructions
         </h3>
         
@@ -317,7 +323,7 @@ const Configuration = ({
             onChange={(e) => setAnalysisPrompt(e.target.value)}
             placeholder="Describe what analysis you want the AI to perform on each row... (hover the ? icon for examples)"
             rows={4}
-            className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
+            className="w-full px-4 py-3 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-amber-500 focus:border-transparent transition-all duration-200 bg-white/50 resize-none"
           />
         </div>
       </div>

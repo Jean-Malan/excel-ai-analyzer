@@ -404,33 +404,43 @@ const ExcelAIAnalyzer = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 p-3 sm:p-6">
+    <div className="min-h-screen bg-slate-50 p-3 sm:p-6">
       <div className="max-w-7xl mx-auto">
         {/* Header */}
-        <div className="text-center mb-6 sm:mb-8">
-          <div className="flex flex-col sm:flex-row items-center justify-center mb-4">
-            <h1 className="text-2xl sm:text-4xl font-bold text-gray-900 mb-2 sm:mb-0">Excel AI Analyzer</h1>
+        <div className="mb-8 sm:mb-12">
+          {/* Navigation Bar */}
+          <div className="flex items-center justify-between mb-8 bg-white/80 backdrop-blur-sm border border-gray-200/50 rounded-2xl px-6 py-4 shadow-sm">
+            <div className="flex items-center space-x-3">
+              <h1 className="text-xl sm:text-2xl font-bold text-gray-900">Excel AI Analyzer</h1>
+            </div>
+            
+            {/* Header buttons */}
+            <div className="flex space-x-2">
+              <button
+                onClick={() => setShowTutorialModal(true)}
+                className="bg-violet-600 hover:bg-violet-700 text-white py-2 px-4 rounded-xl font-medium transition-all duration-200 flex items-center justify-center shadow-sm hover:shadow-md"
+                title="How to use this tool"
+              >
+                <HelpCircle className="w-4 h-4 mr-2" />
+                <span className="hidden sm:inline">Help</span>
+              </button>
+              <button
+                onClick={resetTool}
+                className="bg-gray-600 hover:bg-gray-700 text-white py-2 px-4 rounded-xl font-medium transition-all duration-200 flex items-center justify-center shadow-sm hover:shadow-md"
+                title="Reset everything and start over"
+              >
+                <RotateCcw className="w-4 h-4 mr-2" />
+                <span className="hidden sm:inline">Reset</span>
+              </button>
+            </div>
           </div>
-          <p className="text-base sm:text-lg text-gray-600 mb-4 sm:mb-0">Upload your Excel file and let AI analyze your data</p>
           
-          {/* Header buttons */}
-          <div className="flex flex-col sm:flex-row sm:absolute sm:top-0 sm:right-0 space-y-2 sm:space-y-0 sm:space-x-2 mt-4 sm:mt-0">
-            <button
-              onClick={() => setShowTutorialModal(true)}
-              className="bg-indigo-600 hover:bg-indigo-700 text-white py-2 px-4 rounded-lg font-medium transition-colors flex items-center justify-center w-full sm:w-auto"
-              title="How to use this tool"
-            >
-              <HelpCircle className="w-4 h-4 mr-2" />
-              Help
-            </button>
-            <button
-              onClick={resetTool}
-              className="bg-gray-600 hover:bg-gray-700 text-white py-2 px-4 rounded-lg font-medium transition-colors flex items-center justify-center w-full sm:w-auto"
-              title="Reset everything and start over"
-            >
-              <RotateCcw className="w-4 h-4 mr-2" />
-              Reset
-            </button>
+          {/* Hero Section */}
+          <div className="text-center">
+            <p className="text-gray-600 max-w-2xl mx-auto leading-relaxed">
+              Upload your Excel files and let artificial intelligence analyze your data with custom prompts. 
+              Get insights in seconds, not hours.
+            </p>
           </div>
         </div>
 
