@@ -65,11 +65,11 @@ const Configuration = ({
   if (!file) return null;
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-3 sm:space-y-4">
       {/* AI Configuration Card */}
-      <div className="bg-white rounded-lg shadow-md p-6">
-        <h2 className="text-xl font-semibold mb-4 flex items-center">
-          <Settings className="w-5 h-5 mr-2" />
+      <div className="bg-white rounded-lg shadow-md p-4 sm:p-6">
+        <h2 className="text-lg sm:text-xl font-semibold mb-3 sm:mb-4 flex items-center">
+          <Settings className="w-4 h-4 sm:w-5 sm:h-5 mr-2" />
           2. AI Configuration
         </h2>
         
@@ -189,9 +189,9 @@ const Configuration = ({
       </div>
 
       {/* Data Selection Card */}
-      <div className="bg-white rounded-lg shadow-md p-6">
-        <h3 className="text-lg font-semibold mb-4 flex items-center">
-          <CheckCircle className="w-5 h-5 mr-2" />
+      <div className="bg-white rounded-lg shadow-md p-4 sm:p-6">
+        <h3 className="text-lg font-semibold mb-3 sm:mb-4 flex items-center">
+          <CheckCircle className="w-4 h-4 sm:w-5 sm:h-5 mr-2" />
           Data Selection
         </h3>
         
@@ -274,9 +274,9 @@ const Configuration = ({
       </div>
 
       {/* Analysis Instructions Card */}
-      <div className="bg-white rounded-lg shadow-md p-6">
-        <h3 className="text-lg font-semibold mb-4 flex items-center">
-          <Brain className="w-5 h-5 mr-2" />
+      <div className="bg-white rounded-lg shadow-md p-4 sm:p-6">
+        <h3 className="text-lg font-semibold mb-3 sm:mb-4 flex items-center">
+          <Brain className="w-4 h-4 sm:w-5 sm:h-5 mr-2" />
           Analysis Instructions
         </h3>
         

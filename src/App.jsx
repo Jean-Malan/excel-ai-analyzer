@@ -404,20 +404,20 @@ const ExcelAIAnalyzer = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 p-6">
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 p-3 sm:p-6">
       <div className="max-w-7xl mx-auto">
         {/* Header */}
-        <div className="text-center mb-8 relative">
-          <div className="flex items-center justify-center mb-4">
-            <h1 className="text-4xl font-bold text-gray-900">Excel AI Analyzer</h1>
+        <div className="text-center mb-6 sm:mb-8">
+          <div className="flex flex-col sm:flex-row items-center justify-center mb-4">
+            <h1 className="text-2xl sm:text-4xl font-bold text-gray-900 mb-2 sm:mb-0">Excel AI Analyzer</h1>
           </div>
-          <p className="text-lg text-gray-600">Upload your Excel file and let AI analyze your data</p>
+          <p className="text-base sm:text-lg text-gray-600 mb-4 sm:mb-0">Upload your Excel file and let AI analyze your data</p>
           
           {/* Header buttons */}
-          <div className="absolute top-0 right-0 flex space-x-2">
+          <div className="flex flex-col sm:flex-row sm:absolute sm:top-0 sm:right-0 space-y-2 sm:space-y-0 sm:space-x-2 mt-4 sm:mt-0">
             <button
               onClick={() => setShowTutorialModal(true)}
-              className="bg-indigo-600 hover:bg-indigo-700 text-white py-2 px-4 rounded-lg font-medium transition-colors flex items-center"
+              className="bg-indigo-600 hover:bg-indigo-700 text-white py-2 px-4 rounded-lg font-medium transition-colors flex items-center justify-center w-full sm:w-auto"
               title="How to use this tool"
             >
               <HelpCircle className="w-4 h-4 mr-2" />
@@ -425,7 +425,7 @@ const ExcelAIAnalyzer = () => {
             </button>
             <button
               onClick={resetTool}
-              className="bg-gray-600 hover:bg-gray-700 text-white py-2 px-4 rounded-lg font-medium transition-colors flex items-center"
+              className="bg-gray-600 hover:bg-gray-700 text-white py-2 px-4 rounded-lg font-medium transition-colors flex items-center justify-center w-full sm:w-auto"
               title="Reset everything and start over"
             >
               <RotateCcw className="w-4 h-4 mr-2" />
@@ -437,9 +437,9 @@ const ExcelAIAnalyzer = () => {
         {/* Progress Steps */}
         <ProgressSteps currentStep={currentStep} />
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 xl:grid-cols-3 gap-4 sm:gap-6">
           {/* Configuration Panel */}
-          <div className="lg:col-span-1 space-y-6">
+          <div className="xl:col-span-1 space-y-4 sm:space-y-6">
             {/* File Upload */}
             <FileUpload
               file={file}
@@ -492,7 +492,7 @@ const ExcelAIAnalyzer = () => {
 
           {/* Data Preview */}
           {(file || (import.meta.env.VITE_ENVIRONMENT === 'development' && sheetData.length > 0)) && (
-            <div className="lg:col-span-2">
+            <div className="xl:col-span-2">
               <DataPreview
                 sheetData={sheetData}
                 headers={headers}

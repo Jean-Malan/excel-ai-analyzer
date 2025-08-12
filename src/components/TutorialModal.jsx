@@ -5,13 +5,13 @@ const TutorialModal = ({ isOpen, onClose }) => {
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-lg shadow-xl max-w-4xl w-full max-h-[90vh] overflow-hidden">
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-2 sm:p-4">
+      <div className="bg-white rounded-lg shadow-xl max-w-4xl w-full max-h-[95vh] sm:max-h-[90vh] overflow-hidden">
         {/* Header */}
-        <div className="flex items-center justify-between p-6 border-b border-gray-200">
+        <div className="flex items-center justify-between p-4 sm:p-6 border-b border-gray-200">
           <div className="flex items-center">
-            <Book className="w-6 h-6 text-indigo-600 mr-2" />
-            <h2 className="text-2xl font-semibold text-gray-900">How to Use Excel AI Analyzer</h2>
+            <Book className="w-5 h-5 sm:w-6 sm:h-6 text-indigo-600 mr-2" />
+            <h2 className="text-lg sm:text-2xl font-semibold text-gray-900">How to Use Excel AI Analyzer</h2>
           </div>
           <button
             onClick={onClose}
@@ -22,13 +22,13 @@ const TutorialModal = ({ isOpen, onClose }) => {
         </div>
 
         {/* Content */}
-        <div className="p-6 overflow-y-auto max-h-[calc(90vh-120px)]">
+        <div className="p-4 sm:p-6 overflow-y-auto max-h-[calc(95vh-120px)] sm:max-h-[calc(90vh-120px)]">
           {/* Video Section */}
-          <div className="mb-8">
+          <div className="mb-6 sm:mb-8">
             <div className="bg-gray-900 rounded-lg overflow-hidden shadow-lg">
               <video 
                 controls 
-                className="w-full max-h-96 object-contain"
+                className="w-full max-h-64 sm:max-h-96 object-contain"
                 poster="/cover.png"
                 preload="metadata"
               >
@@ -39,24 +39,24 @@ const TutorialModal = ({ isOpen, onClose }) => {
             </div>
             <div className="flex items-center justify-center mt-3">
               <Play className="w-4 h-4 text-gray-500 mr-2" />
-              <p className="text-sm text-gray-600">Watch the tutorial to see Excel AI Analyzer in action</p>
+              <p className="text-xs sm:text-sm text-gray-600 text-center">Watch the tutorial to see Excel AI Analyzer in action</p>
             </div>
           </div>
 
           {/* Step-by-Step Guide */}
-          <div className="space-y-6">
+          <div className="space-y-4 sm:space-y-6">
             <div>
-              <h3 className="text-lg font-semibold text-gray-900 mb-4">Quick Start Guide</h3>
+              <h3 className="text-base sm:text-lg font-semibold text-gray-900 mb-3 sm:mb-4">Quick Start Guide</h3>
               
-              <div className="space-y-4">
+              <div className="space-y-3 sm:space-y-4">
                 {/* Step 1 */}
                 <div className="flex items-start">
-                  <div className="flex-shrink-0 w-8 h-8 bg-indigo-100 text-indigo-600 rounded-full flex items-center justify-center font-semibold text-sm mr-4">
+                  <div className="flex-shrink-0 w-6 h-6 sm:w-8 sm:h-8 bg-indigo-100 text-indigo-600 rounded-full flex items-center justify-center font-semibold text-xs sm:text-sm mr-3 sm:mr-4">
                     1
                   </div>
                   <div>
-                    <h4 className="font-medium text-gray-900 mb-1">Upload Your Excel File</h4>
-                    <p className="text-sm text-gray-600">
+                    <h4 className="font-medium text-gray-900 mb-1 text-sm sm:text-base">Upload Your Excel File</h4>
+                    <p className="text-xs sm:text-sm text-gray-600">
                       Click "Click to upload" or drag and drop your Excel file. You can also use "Paste Excel Data" 
                       if you want to copy data directly from Excel.
                     </p>
@@ -65,12 +65,12 @@ const TutorialModal = ({ isOpen, onClose }) => {
 
                 {/* Step 2 */}
                 <div className="flex items-start">
-                  <div className="flex-shrink-0 w-8 h-8 bg-indigo-100 text-indigo-600 rounded-full flex items-center justify-center font-semibold text-sm mr-4">
+                  <div className="flex-shrink-0 w-6 h-6 sm:w-8 sm:h-8 bg-indigo-100 text-indigo-600 rounded-full flex items-center justify-center font-semibold text-xs sm:text-sm mr-3 sm:mr-4">
                     2
                   </div>
                   <div>
-                    <h4 className="font-medium text-gray-900 mb-1">Configure AI Settings</h4>
-                    <p className="text-sm text-gray-600 mb-2">
+                    <h4 className="font-medium text-gray-900 mb-1 text-sm sm:text-base">Configure AI Settings</h4>
+                    <p className="text-xs sm:text-sm text-gray-600 mb-2">
                       Enter your OpenAI API key and select your preferred AI model. Each model has different 
                       capabilities and pricing - choose based on your needs.
                     </p>
@@ -158,14 +158,14 @@ const TutorialModal = ({ isOpen, onClose }) => {
         </div>
 
         {/* Footer */}
-        <div className="p-6 border-t border-gray-200 bg-gray-50">
-          <div className="flex items-center justify-between">
-            <p className="text-sm text-gray-600">
+        <div className="p-4 sm:p-6 border-t border-gray-200 bg-gray-50">
+          <div className="flex flex-col sm:flex-row items-center justify-between space-y-3 sm:space-y-0">
+            <p className="text-xs sm:text-sm text-gray-600 text-center sm:text-left">
               Need help? This tutorial will guide you through each step.
             </p>
             <button
               onClick={onClose}
-              className="bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-2 rounded-md font-medium transition-colors"
+              className="bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-2 rounded-md font-medium transition-colors w-full sm:w-auto"
             >
               Got it!
             </button>
