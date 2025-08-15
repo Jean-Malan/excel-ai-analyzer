@@ -39,7 +39,7 @@ const DataPreview = ({
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
-                {processedData.slice(0, 10).map((row, rowIndex) => (
+                {processedData.slice(0, 100).map((row, rowIndex) => (
                   <tr key={rowIndex} className="hover:bg-gray-50">
                     {headers.map((_, colIndex) => (
                       <td

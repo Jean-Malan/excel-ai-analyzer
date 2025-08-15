@@ -1,5 +1,5 @@
 import React from 'react';
-import { Play, Pause, Download, AlertCircle, Info, DollarSign, RefreshCw, SkipForward } from 'lucide-react';
+import { Play, Pause, Download, AlertCircle, Info, DollarSign, RefreshCw, SkipForward, Database } from 'lucide-react';
 
 const ProcessingPanel = ({
   file,
@@ -17,13 +17,19 @@ const ProcessingPanel = ({
   currentStep,
   setCurrentStep,
   onDownloadResults,
+  onAnalyzeWithSQL,
   totalCost,
-  selectedModel
+  selectedModel,
+  dynamicCategoryOptions
 }) => {
   if (!file) return null;
 
   const progressPercentage = progress.total > 0 ? (progress.current / progress.total) * 100 : 0;
-  const canStartProcessing = apiKey && selectedInputColumns.length > 0 && analysisPrompt && outputColumn;
+  
+  // Special validation for Pure Dynamic Mode - it doesn't need traditional setup
+  const isPureDynamicMode = dynamicCategoryOptions?.usePureDynamicMode;
+  const canStartProcessing = apiKey && selectedInputColumns.length > 0 && 
+    (analysisPrompt || isPureDynamicMode) && outputColumn;
 
   return (
     <div className="space-y-6">
@@ -36,16 +42,30 @@ const ProcessingPanel = ({
           </h2>
           
           {!isProcessing && progress.current === 0 ? (
-            <button
-              onClick={() => {
-                setCurrentStep(3);
-                onStartProcessing();
-              }}
-              disabled={!canStartProcessing}
-              className="w-full bg-indigo-600 hover:bg-indigo-700 disabled:bg-gray-400 text-white py-2 px-4 rounded-md font-medium transition-colors"
-            >
-              Start Analysis
-            </button>
+            <div className="space-y-3">
+              {isPureDynamicMode && (
+                <div className="bg-purple-50 border border-purple-200 rounded-lg p-3">
+                  <div className="flex items-center">
+                    <span className="text-purple-600 mr-2">🧠</span>
+                    <div className="text-sm">
+                      <div className="font-medium text-purple-800">Pure AI Mode Active</div>
+                      <div className="text-purple-600">Categories will be discovered automatically during analysis</div>
+                    </div>
+                  </div>
+                </div>
+              )}
+              
+              <button
+                onClick={() => {
+                  setCurrentStep(3);
+                  onStartProcessing();
+                }}
+                disabled={!canStartProcessing}
+                className="w-full bg-indigo-600 hover:bg-indigo-700 disabled:bg-gray-400 text-white py-2 px-4 rounded-md font-medium transition-colors"
+              >
+                {isPureDynamicMode ? 'Start AI Category Discovery' : 'Start Analysis'}
+              </button>
+            </div>
           ) : !isProcessing && progress.current > 0 && progress.current < progress.total ? (
             <div className="space-y-2">
               <div className="grid grid-cols-2 gap-2">
@@ -172,16 +192,32 @@ const ProcessingPanel = ({
         <div className="bg-white rounded-lg shadow-md p-6">
           <h2 className="text-xl font-semibold mb-4 flex items-center">
             <Download className="w-5 h-5 mr-2" />
-            4. Download Results
+            4. Export Results
           </h2>
           
-          <button
-            onClick={onDownloadResults}
-            className="w-full bg-green-600 hover:bg-green-700 text-white py-2 px-4 rounded-md font-medium transition-colors flex items-center justify-center"
-          >
-            <Download className="w-4 h-4 mr-2" />
-            Download Analyzed File
-          </button>
+          <div className="space-y-3">
+            <button
+              onClick={onDownloadResults}
+              className="w-full bg-green-600 hover:bg-green-700 text-white py-2 px-4 rounded-md font-medium transition-colors flex items-center justify-center"
+            >
+              <Download className="w-4 h-4 mr-2" />
+              Download as Excel File
+            </button>
+            
+            {onAnalyzeWithSQL && (
+              <button
+                onClick={onAnalyzeWithSQL}
+                className="w-full bg-blue-600 hover:bg-blue-700 text-white py-2 px-4 rounded-md font-medium transition-colors flex items-center justify-center"
+              >
+                <Database className="w-4 h-4 mr-2" />
+                Analyze with SQL
+              </button>
+            )}
+            
+            <div className="text-xs text-gray-500 text-center mt-2">
+              Continue analysis in Sheet Analysis for SQL queries and aggregations
+            </div>
+          </div>
           
           <div className="mt-3 p-3 bg-blue-50 border border-blue-200 rounded-md">
             <div className="flex items-center">
