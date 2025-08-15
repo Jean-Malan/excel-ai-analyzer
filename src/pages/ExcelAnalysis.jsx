@@ -668,7 +668,7 @@ const ExcelAnalysis = () => {
               onFileUpload={handleFileUpload}
               onSheetChange={handleSheetChange}
               onShowPasteMode={() => setShowPasteMode(true)}
-              onDemoFileLoad={loadDemoFile}
+              onDemoFileLoad={import.meta.env.VITE_ENVIRONMENT === 'development' ? loadDemoFile : undefined}
             />
 
             {/* Configuration */}

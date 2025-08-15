@@ -967,7 +967,7 @@ const SqlAnalysis = () => {
               onFileUpload={handleFileUpload}
               onSheetChange={handleSheetChange}
               onShowPasteMode={() => setShowPasteMode(true)}
-              onDemoFileLoad={loadDemoFile}
+              onDemoFileLoad={import.meta.env.VITE_ENVIRONMENT === 'development' ? loadDemoFile : undefined}
             />
             
             {/* Database Status */}
