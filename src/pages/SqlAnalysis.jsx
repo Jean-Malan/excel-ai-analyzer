@@ -1886,6 +1886,12 @@ const SqlAnalysis = () => {
                           }
                         }
                         
+                        // Safety check: ensure row is a valid object
+                        if (!row || typeof row !== 'object' || Array.isArray(row)) {
+                          console.error('Invalid row data:', row);
+                          return null;
+                        }
+                        
                         return (
                           <tr key={i} className="border-b border-gray-100 hover:bg-gray-50">
                             {/* Confidence column for semantic search */}
@@ -1935,13 +1941,26 @@ const SqlAnalysis = () => {
                               
                               // FORCE convert everything to string - NEVER let objects through
                               let displayValue;
-                              if (typeof cellValue === 'string' || typeof cellValue === 'number') {
-                                displayValue = String(cellValue);
-                              } else if (cellValue === null || cellValue === undefined) {
-                                displayValue = '';
-                              } else {
-                                // Last resort - stringify any remaining objects
-                                displayValue = JSON.stringify(cellValue);
+                              try {
+                                if (typeof cellValue === 'string' || typeof cellValue === 'number' || typeof cellValue === 'boolean') {
+                                  displayValue = String(cellValue);
+                                } else if (cellValue === null || cellValue === undefined) {
+                                  displayValue = '';
+                                } else if (typeof cellValue === 'object') {
+                                  // Handle complex objects more safely
+                                  if (cellValue.constructor === Object || Array.isArray(cellValue)) {
+                                    displayValue = JSON.stringify(cellValue);
+                                  } else {
+                                    // For other object types, try toString first
+                                    displayValue = cellValue.toString ? cellValue.toString() : String(cellValue);
+                                  }
+                                } else {
+                                  // Fallback for any other type
+                                  displayValue = String(cellValue);
+                                }
+                              } catch (error) {
+                                console.error('Error converting cell value:', cellValue, error);
+                                displayValue = '[Error rendering value]';
                               }
                               
                               return (
