@@ -1,6 +1,8 @@
 import React, { useState, useCallback, useEffect } from 'react';
 import { Database, Upload, Play, RotateCcw, Download, Brain } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
+import MultiSelectDropdown from '../components/MultiSelectDropdown';
+import CleanSemanticConfig from '../components/CleanSemanticConfig';
+import { useNavigate, useLocation } from 'react-router-dom';
 import * as XLSX from 'xlsx';
 import * as duckdb from '@duckdb/duckdb-wasm';
 
@@ -14,7 +16,10 @@ import { AIAnalysisService } from '../services/aiAnalysisService';
 import { ProgressTracker, ProgressMessages } from '../services/progressTracker';
 
 const SqlAnalysis = () => {
+  console.log('🟢 SQL ANALYSIS COMPONENT LOADED');
+  
   const navigate = useNavigate();
+  const location = useLocation();
   const [file, setFile] = useState(null);
   const [workbook, setWorkbook] = useState(null);
   const [sheetData, setSheetData] = useState([]);
@@ -39,6 +44,24 @@ const SqlAnalysis = () => {
   const [analysisProgress, setAnalysisProgress] = useState({ step: 0, total: 0, message: '', isActive: false });
   const [analysisLogs, setAnalysisLogs] = useState([]);
   const [showDebugLog, setShowDebugLog] = useState(false);
+  
+  // Real-time streaming results for semantic batch search
+  const [streamingResults, setStreamingResults] = useState([]);
+  const [batchProgress, setBatchProgress] = useState({ completed: 0, total: 0, matches: 0, avgConfidence: 0 });
+  
+  // Semantic search configuration
+  const [showSemanticConfig, setShowSemanticConfig] = useState(false);
+  const [semanticConfig, setSemanticConfig] = useState({
+    searchColumns: [], // Columns to search within
+    returnColumns: [], // Columns to return in results
+    includeConfidence: true,
+    minConfidence: 0.7
+  });
+
+  // Column resizing state
+  const [columnWidths, setColumnWidths] = useState({});
+  const [isResizing, setIsResizing] = useState(false);
+  const [resizingColumn, setResizingColumn] = useState(null);
 
   // For DataPreview component compatibility
   const [processedData, setProcessedData] = useState([]);
@@ -127,9 +150,144 @@ const SqlAnalysis = () => {
         console.error('Error processing transfer data:', error);
       }
     };
+
+    // Check if there's new sheet data from results
+    const checkForNewSheetData = () => {
+      const newSheetData = sessionStorage.getItem('newSheetData');
+      if (newSheetData) {
+        try {
+          const parsedData = JSON.parse(newSheetData);
+          if (parsedData.source === 'sql-analysis-results' && parsedData.data) {
+            addLog('info', `🔄 Loading results as new sheet from ${parsedData.originalMethod}...`);
+            
+            const lines = parsedData.data.trim().split('\n');
+            const sheetData = lines.map(line => line.split('\t'));
+            
+            if (sheetData.length > 0) {
+              // Create mock file object
+              const mockFile = {
+                name: parsedData.fileName,
+                size: parsedData.data.length,
+                type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+              };
+              
+              setFile(mockFile);
+              
+              // Set headers and data
+              const headerRow = sheetData[0];
+              const dataRows = sheetData.slice(1);
+              
+              setHeaders(headerRow);
+              setSheetData(dataRows);
+              setProcessedData(dataRows.map(row => [...row])); // Copy for DataPreview
+              setAvailableSheets(['Sheet1']);
+              setSelectedSheet('Sheet1');
+              
+              // Create mock workbook for compatibility
+              setWorkbook({ SheetNames: ['Sheet1'] });
+              
+              // Reset analysis states
+              setQueryResults([]);
+              setGeneratedQuery('');
+              setAnalysisResults(null);
+              setAnalysisProgress({ step: 0, total: 0, message: '', isActive: false });
+              setAnalysisLogs([]);
+              setStreamingResults([]);
+              setBatchProgress({ completed: 0, total: 0, matches: 0, avgConfidence: 0 });
+              setSelectedInputColumns([]);
+              setOutputColumn('');
+              setIsDbReady(false);
+              
+              addLog('success', `✨ Results loaded as new sheet: ${headerRow.length} columns, ${dataRows.length} rows from ${parsedData.originalMethod}`);
+              
+              // Transfer API key and model if provided
+              if (parsedData.apiKey) {
+                setApiKey(parsedData.apiKey);
+                addLog('info', '🔑 API key transferred');
+              }
+              if (parsedData.selectedModel) {
+                setSelectedModel(parsedData.selectedModel);
+                addLog('info', `🤖 Model selection transferred: ${parsedData.selectedModel}`);
+              }
+              
+              // Clear the transfer data
+              sessionStorage.removeItem('newSheetData');
+            }
+          }
+        } catch (error) {
+          console.error('Error processing new sheet data:', error);
+        }
+      }
+    };
     
     checkForTransferData();
+    checkForNewSheetData();
   }, []);
+
+  // Check for new sheet data when URL changes (e.g., after "Use as New Sheet")
+  useEffect(() => {
+    const urlParams = new URLSearchParams(location.search);
+    if (urlParams.get('source') === 'results') {
+      // Small delay to ensure sessionStorage is set
+      setTimeout(() => {
+        const checkForNewSheetData = () => {
+          const newSheetData = sessionStorage.getItem('newSheetData');
+          if (newSheetData) {
+            try {
+              const parsedData = JSON.parse(newSheetData);
+              if (parsedData.source === 'sql-analysis-results' && parsedData.data) {
+                addLog('info', `🔄 Loading results as new sheet from ${parsedData.originalMethod}...`);
+                
+                const lines = parsedData.data.trim().split('\n');
+                const sheetData = lines.map(line => line.split('\t'));
+                
+                if (sheetData.length > 0) {
+                  const headerRow = sheetData[0];
+                  const dataRows = sheetData.slice(1);
+                  
+                  // Create a mock workbook structure
+                  const ws = XLSX.utils.aoa_to_sheet([headerRow, ...dataRows]);
+                  const wb = XLSX.utils.book_new();
+                  XLSX.utils.book_append_sheet(wb, ws, 'Transferred Results');
+                  
+                  // Set the workbook and sheet data
+                  setWorkbook(wb);
+                  setHeaders(headerRow);
+                  setSheetData(dataRows);
+                  setSelectedSheet('Transferred Results');
+                  setAvailableSheets(['Transferred Results']);
+                  
+                  // Create mock file object
+                  setFile({
+                    name: parsedData.fileName || 'transferred_results.xlsx',
+                    size: parsedData.data.length,
+                    type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+                  });
+                  
+                  // Transfer API key and model if provided
+                  if (parsedData.apiKey) {
+                    setApiKey(parsedData.apiKey);
+                    addLog('info', '🔑 API key transferred');
+                  }
+                  if (parsedData.selectedModel) {
+                    setSelectedModel(parsedData.selectedModel);
+                    addLog('info', `🤖 Model selection transferred: ${parsedData.selectedModel}`);
+                  }
+                  
+                  // Clear the transfer data
+                  sessionStorage.removeItem('newSheetData');
+                }
+              }
+            } catch (error) {
+              console.error('Error processing new sheet data:', error);
+            }
+          }
+        };
+        
+        checkForNewSheetData();
+      }, 100);
+    }
+  }, [location.search]);
 
   // Initialize DuckDB
   useEffect(() => {
@@ -540,6 +698,9 @@ const SqlAnalysis = () => {
   });
 
   const intelligentAnalysis = async () => {
+    console.log('🔥 INTELLIGENT ANALYSIS BUTTON CLICKED!', userQuestion);
+    addLog('error', '🟢 BUTTON CLICKED - LOGS ARE WORKING!', { question: userQuestion });
+    
     if (!userQuestion || !apiKey) {
       setError('Please enter both a question and your OpenAI API key');
       return;
@@ -551,12 +712,15 @@ const SqlAnalysis = () => {
       return;
     }
 
+    console.log('✅ VALIDATION PASSED, STARTING ANALYSIS');
     setIsAnalyzing(true);
     setError('');
     setQueryResults([]);
     setGeneratedQuery('');
     setAnalysisResults(null);
     setAnalysisLogs([]); // Clear previous logs
+    setStreamingResults([]); // Clear streaming results
+    setBatchProgress({ completed: 0, total: 0, matches: 0, avgConfidence: 0 }); // Reset batch progress
     
     addLog('info', '🚀 Starting intelligent analysis...', { question: userQuestion, model: selectedModel });
     progressTracker.start(3, ProgressMessages.DETERMINING_STRATEGY);
@@ -580,16 +744,70 @@ const SqlAnalysis = () => {
       addLog('debug', '🎯 Schema details', { schema });
       addLog('debug', '📋 Sample data', { sampleData });
       
+      // First, let AI determine strategy (with logging)
+      addLog('info', '🎯 Determining analysis strategy...', { userQuestion });
+      const strategy = await aiService.determineAnalysisStrategy(userQuestion, schema, sampleData);
+      
+      // LOG THE CHOSEN STRATEGY PROMINENTLY
+      addLog('success', `🚀 STRATEGY SELECTED: ${strategy.method.toUpperCase()}`, { 
+        method: strategy.method,
+        reasoning: strategy.reasoning,
+        expectedResults: strategy.expectedResults
+      });
+      
       // Run the intelligent analysis with enhanced logging
       progressTracker.nextStep('Executing chosen analysis method...');
-      addLog('info', '🤖 Calling AI service to analyze question...');
+      addLog('info', `🤖 Executing ${strategy.method} analysis...`);
+      
+      // Setup real-time callbacks for semantic batch search
+      const callbacks = {
+        onBatchComplete: (batchResult) => {
+          addLog('info', `📦 Batch ${batchResult.batchIndex + 1} complete: ${batchResult.matches.length} new matches`, { 
+            batchIndex: batchResult.batchIndex,
+            newMatches: batchResult.matches.length 
+          });
+          
+          // Add new matches to streaming results
+          setStreamingResults(prev => [...prev, ...batchResult.matches]);
+          
+          // Update batch progress
+          setBatchProgress({
+            completed: batchResult.batchProgress.completed,
+            total: batchResult.batchProgress.total,
+            matches: streamingResults.length + batchResult.matches.length,
+            avgConfidence: 0 // Will be updated by progress callback
+          });
+        },
+        
+        onProgressUpdate: (progress) => {
+          setBatchProgress({
+            completed: progress.completedBatches,
+            total: progress.totalBatches,
+            matches: progress.totalMatches,
+            avgConfidence: progress.averageConfidence
+          });
+          
+          addLog('info', `🔄 Progress: ${progress.completedBatches}/${progress.totalBatches} batches, ${progress.totalMatches} matches (${Math.round(progress.averageConfidence * 100)}% avg confidence)`);
+        },
+        
+        // Pass semantic configuration and whether it's enabled
+        semanticConfig: {
+          ...semanticConfig,
+          enabled: showSemanticConfig
+        }
+      };
+      
+      console.log('🚀 ABOUT TO CALL analyzeQuestion:', userQuestion);
+      addLog('error', '🚀 ABOUT TO CALL AI SERVICE', { question: userQuestion });
       
       const results = await aiService.analyzeQuestion(
         userQuestion, 
         schema, 
         sampleData, 
-        database
+        database,
+        callbacks
       );
+      console.log('📊 ANALYZE QUESTION COMPLETED:', results?.method);
       
       addLog('success', '✅ AI analysis completed successfully!', { 
         method: results.method,
@@ -605,7 +823,28 @@ const SqlAnalysis = () => {
         setGeneratedQuery(results.sqlQuery);
       }
       if (results.results || results.matches) {
-        const resultData = results.results || results.matches || [];
+        let resultData = results.results || results.matches || [];
+        
+        // Special handling for semantic search results to ensure compatibility
+        if (results.method === 'semantic_batch_search' && resultData.length > 0) {
+          resultData = resultData.map((row, index) => ({
+            // Original row data first (for compatibility with row-by-row and sheet analysis)
+            ...row,
+            // Ensure confidence metadata is preserved for display
+            _confidence: row._confidence || 0,
+            _matchReason: row._matchReason || '',
+            _batchIndex: row._batchIndex || 0,
+            _globalIndex: row._globalIndex !== undefined ? row._globalIndex : index
+          }));
+          
+          addLog('info', `✨ Semantic search results formatted for workflow compatibility`, {
+            totalResults: resultData.length,
+            hasConfidence: resultData.every(row => row._confidence !== undefined),
+            dataColumns: Object.keys(resultData[0]).filter(key => !key.startsWith('_')).length,
+            avgConfidence: Math.round(resultData.reduce((sum, row) => sum + row._confidence, 0) / resultData.length * 100)
+          });
+        }
+        
         addLog('success', `📈 Found ${resultData.length} results`, { resultsPreview: resultData.slice(0, 3) });
         setQueryResults(resultData);
       }
@@ -757,21 +996,42 @@ const SqlAnalysis = () => {
 
   const processWithRowByRow = () => {
     try {
+      console.log('[DEBUG] Row-by-row processing started:', {
+        queryResultsLength: queryResults?.length,
+        analysisResultsExists: !!analysisResults,
+        analysisMethod: analysisResults?.method
+      });
+      
       let dataToTransfer = null;
       let fileName = '';
       
-      // Check if we have SQL query results to transfer
+      // Check if we have query results to transfer
       if (queryResults && queryResults.length > 0) {
-        // Use SQL query results
-        const resultHeaders = Object.keys(queryResults[0]);
-        const resultRows = queryResults.map(row => 
+        // Clean the data for transfer (remove metadata for clean row-by-row analysis)
+        const cleanedResults = queryResults.map(row => {
+          const cleanRow = { ...row };
+          // Remove semantic search metadata that shouldn't be in row-by-row analysis
+          delete cleanRow._confidence;
+          delete cleanRow._matchReason;
+          delete cleanRow._batchIndex;
+          delete cleanRow._localIndex;
+          delete cleanRow._globalIndex;
+          delete cleanRow._aiAnalysis;
+          return cleanRow;
+        });
+        
+        const resultHeaders = Object.keys(cleanedResults[0]);
+        const resultRows = cleanedResults.map(row => 
           resultHeaders.map(header => row[header] ?? '')
         );
         
         dataToTransfer = [resultHeaders, ...resultRows]
           .map(row => row.join('\t'))
           .join('\n');
-        fileName = `sql_results_${new Date().toISOString().slice(0,10)}.xlsx`;
+        
+        // Use appropriate filename based on analysis method
+        const methodName = analysisResults?.method || 'results';
+        fileName = `${methodName}_${new Date().toISOString().slice(0,10)}.xlsx`;
       } else if (analysisResults && analysisResults.results && analysisResults.results.length > 0) {
         // Use AI analysis results if no SQL results
         const resultHeaders = Object.keys(analysisResults.results[0]);
@@ -814,6 +1074,153 @@ const SqlAnalysis = () => {
       alert('Error transferring data. Please try downloading results and then uploading to Row-by-Row Analysis manually.');
     }
   };
+
+  const processAsNewSheet = () => {
+    try {
+      console.log('[DEBUG] New sheet processing started:', {
+        queryResultsLength: queryResults?.length,
+        analysisResultsExists: !!analysisResults,
+        analysisMethod: analysisResults?.method
+      });
+      
+      let dataToTransfer = null;
+      let fileName = '';
+      
+      // Check if we have query results to transfer
+      if (queryResults && queryResults.length > 0) {
+        // Clean the data for transfer (remove metadata for clean sheet analysis)
+        const cleanedResults = queryResults.map(row => {
+          const cleanRow = { ...row };
+          // Remove semantic search metadata that shouldn't be in sheet analysis
+          delete cleanRow._confidence;
+          delete cleanRow._matchReason;
+          delete cleanRow._batchIndex;
+          delete cleanRow._localIndex;
+          delete cleanRow._globalIndex;
+          delete cleanRow._aiAnalysis;
+          return cleanRow;
+        });
+        
+        const resultHeaders = Object.keys(cleanedResults[0]);
+        const resultRows = cleanedResults.map(row => 
+          resultHeaders.map(header => row[header] ?? '')
+        );
+        
+        dataToTransfer = [resultHeaders, ...resultRows]
+          .map(row => row.join('\t'))
+          .join('\n');
+        
+        // Use appropriate filename based on analysis method
+        const methodName = analysisResults?.method || 'results';
+        fileName = `${methodName}_results_${new Date().toISOString().slice(0,10)}.xlsx`;
+      } else if (analysisResults && (analysisResults.results || analysisResults.matches)) {
+        // Use AI analysis results if no queryResults
+        const resultData = analysisResults.results || analysisResults.matches || [];
+        const cleanedResults = resultData.map(row => {
+          const cleanRow = { ...row };
+          delete cleanRow._confidence;
+          delete cleanRow._matchReason;
+          delete cleanRow._batchIndex;
+          delete cleanRow._localIndex;
+          delete cleanRow._globalIndex;
+          delete cleanRow._aiAnalysis;
+          return cleanRow;
+        });
+        
+        const resultHeaders = Object.keys(cleanedResults[0]);
+        const resultRows = cleanedResults.map(row => 
+          resultHeaders.map(header => row[header] ?? '')
+        );
+        
+        dataToTransfer = [resultHeaders, ...resultRows]
+          .map(row => row.join('\t'))
+          .join('\n');
+        fileName = `${analysisResults.method}_results_${new Date().toISOString().slice(0,10)}.xlsx`;
+      } else {
+        alert('No results available to transfer. Please run an analysis first.');
+        return;
+      }
+      
+      // Store the data in sessionStorage for retrieval by Sheet Analysis
+      const transferData = {
+        data: dataToTransfer,
+        fileName: fileName,
+        source: 'sql-analysis-results',
+        apiKey: apiKey, // Transfer the API key
+        selectedModel: selectedModel, // Transfer the selected model too
+        timestamp: Date.now(),
+        originalMethod: analysisResults?.method
+      };
+      
+      sessionStorage.setItem('newSheetData', JSON.stringify(transferData));
+      
+      console.log('[DEBUG] Data prepared for new sheet:', {
+        fileName,
+        dataLength: dataToTransfer.length,
+        source: 'sql-analysis-results'
+      });
+      
+      // Navigate to a new SQL Analysis instance
+      navigate('/sql-analysis?source=results');
+      
+    } catch (error) {
+      console.error('Error transferring data to new sheet:', error);
+      alert('Error transferring data. Please try downloading results and then uploading manually.');
+    }
+  };
+
+  // Column resizing functions
+  const handleMouseDown = (e, columnKey) => {
+    e.preventDefault();
+    setIsResizing(true);
+    setResizingColumn(columnKey);
+    
+    const startX = e.clientX;
+    const startWidth = columnWidths[columnKey] || 200; // Default width
+    
+    const handleMouseMove = (e) => {
+      const newWidth = Math.max(50, startWidth + e.clientX - startX); // Minimum width of 50px
+      setColumnWidths(prev => ({
+        ...prev,
+        [columnKey]: newWidth
+      }));
+    };
+    
+    const handleMouseUp = () => {
+      setIsResizing(false);
+      setResizingColumn(null);
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+    };
+    
+    document.addEventListener('mousemove', handleMouseMove);
+    document.addEventListener('mouseup', handleMouseUp);
+  };
+
+  // Initialize column widths when results change
+  useEffect(() => {
+    if (queryResults && queryResults.length > 0) {
+      const columns = Object.keys(queryResults[0]);
+      const initialWidths = {};
+      
+      columns.forEach(col => {
+        if (!columnWidths[col]) {
+          // Set initial width based on column content
+          if (col === '_confidence' || analysisResults?.method === 'semantic_batch_search' && col === 'Confidence') {
+            initialWidths[col] = 120;
+          } else if (col.length > 15) {
+            initialWidths[col] = 200;
+          } else {
+            initialWidths[col] = 150;
+          }
+        }
+      });
+      
+      if (Object.keys(initialWidths).length > 0) {
+        setColumnWidths(prev => ({ ...prev, ...initialWidths }));
+      }
+    }
+  }, [queryResults, analysisResults]);
 
   // Load demo file function
   const loadDemoFile = async (fileName) => {
@@ -1026,6 +1433,18 @@ const SqlAnalysis = () => {
               </div>
             )}
 
+            {/* Semantic Search Configuration - Clean Version */}
+            {isDbReady && (
+              <CleanSemanticConfig
+                showSemanticConfig={showSemanticConfig}
+                setShowSemanticConfig={setShowSemanticConfig}
+                semanticConfig={semanticConfig}
+                setSemanticConfig={setSemanticConfig}
+                headers={headers}
+                schema={schema}
+              />
+            )}
+
             {/* Query Input */}
             {isDbReady && (
               <div className="bg-white/80 backdrop-blur-sm border border-gray-200/50 rounded-2xl p-6 shadow-sm">
@@ -1054,6 +1473,20 @@ const SqlAnalysis = () => {
                         className="block text-left text-blue-600 hover:text-blue-800 underline"
                       >
                         • Show me the top 10 highest values
+                      </button>
+                      <button
+                        onClick={() => setUserQuestion("Find all stationary items")}
+                        className="block text-left text-green-600 hover:text-green-800 underline"
+                        title="🎯 Semantic search - uses AI understanding instead of keyword matching"
+                      >
+                        • Find all stationary items <span className="text-xs text-green-500">(semantic)</span>
+                      </button>
+                      <button
+                        onClick={() => setUserQuestion("Get me office supplies")}
+                        className="block text-left text-green-600 hover:text-green-800 underline"
+                        title="🎯 Semantic search - finds items by context and meaning"
+                      >
+                        • Get me office supplies <span className="text-xs text-green-500">(semantic)</span>
                       </button>
                       <button
                         onClick={() => setUserQuestion("Identify outliers in numeric columns")}
@@ -1220,209 +1653,142 @@ const SqlAnalysis = () => {
               </div>
             )}
 
-            {/* AI Analysis Results */}
-            {analysisResults && (
-              <div className="bg-gradient-to-br from-blue-50 to-indigo-50 border border-blue-200 rounded-2xl p-6 shadow-sm">
-                <h3 className="text-lg font-semibold text-blue-900 mb-4 flex items-center">
-                  <div className="w-6 h-6 bg-blue-600 rounded-full flex items-center justify-center mr-2">
-                    <span className="text-white text-xs">🧠</span>
+            {/* Real-time Streaming Results for Semantic Search */}
+            {isAnalyzing && batchProgress.total > 0 && (
+              <div className="bg-gradient-to-br from-green-50 to-blue-50 border border-green-200 rounded-2xl p-6 shadow-sm">
+                <h3 className="text-lg font-semibold text-green-900 mb-4 flex items-center">
+                  <div className="w-6 h-6 bg-green-600 rounded-full flex items-center justify-center mr-2">
+                    <div className="animate-spin rounded-full h-3 w-3 border-2 border-white border-t-transparent"></div>
                   </div>
-                  AI Analysis Results
+                  🔍 Semantic Search in Progress
                 </h3>
                 
-                <div className="space-y-4">
-                  {/* Analysis Method */}
-                  <div className="bg-white/60 rounded-lg p-4 border border-blue-100">
-                    <h4 className="font-semibold text-blue-800 mb-2">Analysis Method</h4>
-                    <p className="text-blue-700 capitalize">{analysisResults.method?.replace(/_/g, ' ')}</p>
+                {/* Real-time Progress */}
+                <div className="mb-4">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-sm font-medium text-green-800">
+                      Processing Batches: {batchProgress.completed}/{batchProgress.total}
+                    </span>
+                    <span className="text-sm text-green-600">
+                      {batchProgress.matches} matches found (avg: {Math.round(batchProgress.avgConfidence * 100)}%)
+                    </span>
                   </div>
                   
-                  {/* Summary */}
-                  <div className="bg-white/60 rounded-lg p-4 border border-blue-100">
-                    <h4 className="font-semibold text-blue-800 mb-2">Summary</h4>
-                    <p className="text-blue-700">
-                      {(() => {
-                        const summary = analysisResults.summary;
-                        if (typeof summary === 'string') {
-                          return summary;
-                        } else if (typeof summary === 'object' && summary !== null) {
-                          // Handle object summaries by creating a structured display
-                          return (
-                            <div className="space-y-2">
-                              {Object.entries(summary)
-                                .filter(([key, value]) => value !== null && value !== undefined && value !== '')
-                                .map(([key, value], index) => (
-                                  <div key={index} className="border-l-2 border-blue-300 pl-3">
-                                    <div className="font-medium text-blue-800 capitalize text-sm">
-                                      {key.replace(/_/g, ' ')}
+                  {/* Progress Bar */}
+                  <div className="w-full bg-green-100 rounded-full h-2">
+                    <div 
+                      className="bg-green-600 h-2 rounded-full transition-all duration-500 ease-out"
+                      style={{ width: `${(batchProgress.completed / batchProgress.total) * 100}%` }}
+                    ></div>
+                  </div>
+                </div>
+
+                {/* Live Results Table */}
+                {streamingResults.length > 0 && (
+                  <div>
+                    <h4 className="font-semibold text-green-800 mb-3">
+                      Live Results ({streamingResults.length} matches so far)
+                    </h4>
+                    <div className="overflow-x-auto max-h-64 overflow-y-auto bg-white/60 rounded-lg">
+                      <table className="w-full text-sm">
+                        <thead className="sticky top-0 bg-white">
+                          <tr className="border-b border-gray-200">
+                            {semanticConfig.includeConfidence && (
+                              <th 
+                                className="relative text-left p-2 font-medium text-gray-700 bg-green-50 select-none"
+                                style={{ width: columnWidths['Confidence'] || 120, minWidth: '50px' }}
+                              >
+                                <div className="flex items-center gap-2">
+                                  <span className="text-green-700">🎯 Confidence</span>
+                                  <span className="text-xs text-green-600 bg-green-100 px-1.5 py-0.5 rounded">AI</span>
+                                </div>
+                                {/* Resize handle */}
+                                <div
+                                  className="absolute right-0 top-0 bottom-0 w-1 cursor-col-resize hover:bg-blue-400 opacity-0 hover:opacity-100 transition-opacity"
+                                  onMouseDown={(e) => handleMouseDown(e, 'Confidence')}
+                                  title="Drag to resize column"
+                                />
+                              </th>
+                            )}
+                            {(() => {
+                              // Show configured return columns or first few columns
+                              const availableKeys = Object.keys(streamingResults[0]).filter(key => !key.startsWith('_'));
+                              const keysToShow = semanticConfig.returnColumns && semanticConfig.returnColumns.length > 0 
+                                ? semanticConfig.returnColumns.filter(col => availableKeys.includes(col))
+                                : availableKeys.slice(0, 4);
+                              
+                              return keysToShow.map(key => (
+                                <th 
+                                  key={key} 
+                                  className="relative text-left p-2 font-medium text-gray-700 select-none"
+                                  style={{ width: columnWidths[key] || 150, minWidth: '50px' }}
+                                >
+                                  <div className="truncate">{key}</div>
+                                  {/* Resize handle */}
+                                  <div
+                                    className="absolute right-0 top-0 bottom-0 w-1 cursor-col-resize hover:bg-blue-400 opacity-0 hover:opacity-100 transition-opacity"
+                                    onMouseDown={(e) => handleMouseDown(e, key)}
+                                    title="Drag to resize column"
+                                  />
+                                </th>
+                              ));
+                            })()}
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {streamingResults.slice(-10).map((row, i) => {
+                            // Calculate keys to show (same logic as header)
+                            const availableKeys = Object.keys(streamingResults[0]).filter(key => !key.startsWith('_'));
+                            const keysToShow = semanticConfig.returnColumns && semanticConfig.returnColumns.length > 0 
+                              ? semanticConfig.returnColumns.filter(col => availableKeys.includes(col))
+                              : availableKeys.slice(0, 4);
+                              
+                            return (
+                              <tr key={`streaming-${i}`} className="border-b border-gray-100 hover:bg-gray-50">
+                                {semanticConfig.includeConfidence && (
+                                  <td 
+                                    className="p-2 bg-green-50/50"
+                                    style={{ width: columnWidths['Confidence'] || 120, minWidth: '50px' }}
+                                  >
+                                    <div className={`px-2 py-1 rounded text-xs font-medium ${
+                                      row._confidence >= 0.9 ? 'bg-green-100 text-green-800' :
+                                      row._confidence >= 0.8 ? 'bg-blue-100 text-blue-800' :
+                                      'bg-yellow-100 text-yellow-800'
+                                    }`}>
+                                      {Math.round(row._confidence * 100)}%
                                     </div>
-                                    <div className="text-blue-700 text-sm">
-                                      {typeof value === 'object' ? JSON.stringify(value, null, 2) : String(value)}
+                                  </td>
+                                )}
+                                {keysToShow.map((key, j) => (
+                                  <td 
+                                    key={j} 
+                                    className="p-2 text-gray-600"
+                                    style={{ width: columnWidths[key] || 150, minWidth: '50px' }}
+                                  >
+                                    <div className="truncate" title={String(row[key] || '')}>
+                                      {String(row[key] || '')}
                                     </div>
-                                  </div>
+                                  </td>
                                 ))}
-                            </div>
-                          );
-                        }
-                        return 'Analysis completed successfully';
-                      })()}
-                    </p>
-                  </div>
-                  
-                  {/* Insights from legacy format or analysis results */}
-                  {(analysisResults.analysis?.insights || analysisResults.insights) && (
-                    <div className="bg-white/60 rounded-lg p-4 border border-blue-100">
-                      <h4 className="font-semibold text-blue-800 mb-2">Key Insights</h4>
-                      <ul className="space-y-1">
-                        {(() => {
-                          const insights = analysisResults.analysis?.insights || analysisResults.insights;
-                          
-                          // Handle both array and object formats
-                          if (Array.isArray(insights)) {
-                            return insights.map((insight, i) => (
-                              <li key={i} className="text-blue-700 flex items-start">
-                                <span className="text-blue-500 mr-2">•</span>
-                                {typeof insight === 'string' ? insight : JSON.stringify(insight)}
-                              </li>
-                            ));
-                          } else if (typeof insights === 'object') {
-                            // Handle object format - display key insights
-                            if (insights.insights && Array.isArray(insights.insights)) {
-                              return insights.insights.map((insight, i) => (
-                                <li key={i} className="text-blue-700 flex items-start">
-                                  <span className="text-blue-500 mr-2">•</span>
-                                  {typeof insight === 'string' ? insight : JSON.stringify(insight)}
-                                </li>
-                              ));
-                            } else {
-                              // Fallback for other object structures - render each key-value pair
-                              return Object.entries(insights).map(([key, value], i) => (
-                                <li key={i} className="text-blue-700 flex items-start">
-                                  <span className="text-blue-500 mr-2">•</span>
-                                  <div>
-                                    <span className="font-medium">{key.replace(/_/g, ' ')}: </span>
-                                    {typeof value === 'string' ? value : JSON.stringify(value)}
-                                  </div>
-                                </li>
-                              ));
-                            }
-                          }
-                          
-                          return null;
-                        })()}
-                      </ul>
-                    </div>
-                  )}
-                  
-                  {/* Conclusion */}
-                  {(analysisResults.analysis?.conclusion || analysisResults.conclusion) && (
-                    <div className="bg-white/60 rounded-lg p-4 border border-blue-100">
-                      <h4 className="font-semibold text-blue-800 mb-2">Conclusion</h4>
-                      <p className="text-blue-700">
-                        {(() => {
-                          const conclusion = analysisResults.analysis?.conclusion || analysisResults.conclusion;
-                          return typeof conclusion === 'string' ? conclusion : JSON.stringify(conclusion);
-                        })()}
-                      </p>
-                    </div>
-                  )}
-                  
-                  {/* Recommendations */}
-                  {(analysisResults.analysis?.recommendations || analysisResults.recommendations) && (
-                    <div className="bg-white/60 rounded-lg p-4 border border-blue-100">
-                      <h4 className="font-semibold text-blue-800 mb-2">Recommendations</h4>
-                      <p className="text-blue-700">
-                        {(() => {
-                          const recommendations = analysisResults.analysis?.recommendations || analysisResults.recommendations;
-                          return typeof recommendations === 'string' ? recommendations : JSON.stringify(recommendations);
-                        })()}
-                      </p>
-                    </div>
-                  )}
-                  
-                  {/* Results Count */}
-                  <div className="bg-white/60 rounded-lg p-4 border border-blue-100">
-                    <div className="flex items-center justify-between mb-2">
-                      <h4 className="font-semibold text-blue-800">Results</h4>
-                      {(analysisResults.matches?.length > 0 || analysisResults.results?.length > 0) && (
-                        <div className="flex items-center gap-2">
-                          <button
-                            onClick={() => {
-                              const data = analysisResults.matches || analysisResults.results || [];
-                              const cleanData = data.map(row => {
-                                const cleanRow = { ...row };
-                                delete cleanRow._aiAnalysis; // Remove AI metadata for cleaner export
-                                return cleanRow;
-                              });
-                              downloadAsCSV(cleanData, `ai_analysis_${analysisResults.method}_${new Date().toISOString().split('T')[0]}`);
-                            }}
-                            className="bg-blue-600 hover:bg-blue-700 text-white px-2 py-1 rounded text-xs font-medium transition-colors flex items-center gap-1"
-                            title="Download AI analysis results as CSV"
-                          >
-                            <Download className="w-3 h-3" />
-                            CSV
-                          </button>
-                          <button
-                            onClick={() => {
-                              const data = analysisResults.matches || analysisResults.results || [];
-                              const cleanData = data.map(row => {
-                                const cleanRow = { ...row };
-                                delete cleanRow._aiAnalysis; // Remove AI metadata for cleaner export
-                                return cleanRow;
-                              });
-                              downloadAsExcel(cleanData, `ai_analysis_${analysisResults.method}_${new Date().toISOString().split('T')[0]}`);
-                            }}
-                            className="bg-green-600 hover:bg-green-700 text-white px-2 py-1 rounded text-xs font-medium transition-colors flex items-center gap-1"
-                            title="Download AI analysis results as Excel"
-                          >
-                            <Download className="w-3 h-3" />
-                            Excel
-                          </button>
-                          <button
-                            onClick={processWithRowByRow}
-                            className="bg-purple-600 hover:bg-purple-700 text-white px-2 py-1 rounded text-xs font-medium transition-colors flex items-center gap-1"
-                            title="Process these results row-by-row with AI"
-                          >
-                            <Brain className="w-3 h-3" />
-                            Row-by-Row
-                          </button>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                      {streamingResults.length > 10 && (
+                        <div className="text-center p-2 text-xs text-gray-500 bg-gray-50">
+                          Showing latest 10 of {streamingResults.length} matches...
                         </div>
                       )}
                     </div>
-                    <p className="text-blue-700">
-                      Found {analysisResults.matches?.length || analysisResults.results?.length || 0} results
-                      {analysisResults.total && ` out of ${analysisResults.total} total rows`}
-                    </p>
                   </div>
-                </div>
+                )}
               </div>
             )}
 
-            {/* Generated Query */}
-            {generatedQuery && (
-              <div className="bg-white/80 backdrop-blur-sm border border-gray-200/50 rounded-2xl p-6 shadow-sm">
-                <h3 className="text-lg font-semibold text-gray-900 mb-4">Generated SQL Query</h3>
-                <div className="bg-gray-900 text-green-400 p-4 rounded-lg font-mono text-sm overflow-x-auto">
-                  {generatedQuery}
-                </div>
-                <button
-                  onClick={() => executeQuery()}
-                  className="mt-4 bg-green-600 hover:bg-green-700 text-white py-2 px-4 rounded-lg font-medium transition-colors"
-                >
-                  Re-run Query
-                </button>
-              </div>
-            )}
+            {/* REMOVED: AI Analysis Results moved to appear after Query Results */}
 
-            {/* Error Display */}
-            {error && (
-              <div className="bg-red-50 border border-red-200 rounded-2xl p-6">
-                <h3 className="text-lg font-semibold text-red-900 mb-2">Error</h3>
-                <p className="text-red-700">{error}</p>
-              </div>
-            )}
-
-            {/* Query Results */}
+            {/* Query Results - NOW APPEARS FIRST */}
             {queryResults.length > 0 && (
               <div className="bg-white/80 backdrop-blur-sm border border-gray-200/50 rounded-2xl p-6 shadow-sm">
                 <div className="flex items-center justify-between mb-4">
@@ -1454,15 +1820,50 @@ const SqlAnalysis = () => {
                       <Brain className="w-4 h-4" />
                       Process Row-by-Row
                     </button>
+                    <button
+                      onClick={processAsNewSheet}
+                      className="bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-2 rounded-lg text-sm font-medium transition-colors flex items-center gap-2"
+                      title="Use these results as a new sheet for further analysis"
+                    >
+                      <Database className="w-4 h-4" />
+                      Use as New Sheet
+                    </button>
                   </div>
                 </div>
                 <div className="overflow-x-auto max-h-96 overflow-y-auto">
                   <table className="w-full text-sm">
                     <thead className="sticky top-0 bg-white">
                       <tr className="border-b border-gray-200">
-                        {Object.keys(queryResults[0]).map(key => (
-                          <th key={key} className="text-left p-2 font-medium text-gray-700">
-                            {key}
+                        {analysisResults?.method === 'semantic_batch_search' && queryResults[0]?._confidence && (
+                          <th 
+                            className="relative text-left p-2 font-medium text-gray-700 bg-green-50 select-none"
+                            style={{ width: columnWidths['Confidence'] || 120, minWidth: '50px' }}
+                          >
+                            <div className="flex items-center gap-2">
+                              <span className="text-green-700">🎯 Confidence</span>
+                              <span className="text-xs text-green-600 bg-green-100 px-1.5 py-0.5 rounded">AI</span>
+                            </div>
+                            {/* Resize handle */}
+                            <div
+                              className="absolute right-0 top-0 bottom-0 w-1 cursor-col-resize hover:bg-blue-400 opacity-0 hover:opacity-100 transition-opacity"
+                              onMouseDown={(e) => handleMouseDown(e, 'Confidence')}
+                              title="Drag to resize column"
+                            />
+                          </th>
+                        )}
+                        {Object.keys(queryResults[0]).filter(key => !key.startsWith('_')).map(key => (
+                          <th 
+                            key={key} 
+                            className="relative text-left p-2 font-medium text-gray-700 select-none"
+                            style={{ width: columnWidths[key] || 150, minWidth: '50px' }}
+                          >
+                            <div className="truncate">{key}</div>
+                            {/* Resize handle */}
+                            <div
+                              className="absolute right-0 top-0 bottom-0 w-1 cursor-col-resize hover:bg-blue-400 opacity-0 hover:opacity-100 transition-opacity"
+                              onMouseDown={(e) => handleMouseDown(e, key)}
+                              title="Drag to resize column"
+                            />
                           </th>
                         ))}
                       </tr>
@@ -1487,7 +1888,34 @@ const SqlAnalysis = () => {
                         
                         return (
                           <tr key={i} className="border-b border-gray-100 hover:bg-gray-50">
-                            {Object.keys(queryResults[0]).map((key, j) => {
+                            {/* Confidence column for semantic search */}
+                            {analysisResults?.method === 'semantic_batch_search' && row._confidence && (
+                              <td 
+                                className="p-2 bg-green-50/50"
+                                style={{ width: columnWidths['Confidence'] || 120, minWidth: '50px' }}
+                              >
+                                <div className="flex items-center gap-2">
+                                  <div className={`px-2.5 py-1.5 rounded-full text-xs font-bold shadow-sm ${
+                                    row._confidence >= 0.9 ? 'bg-green-500 text-white' :
+                                    row._confidence >= 0.8 ? 'bg-blue-500 text-white' :
+                                    row._confidence >= 0.7 ? 'bg-orange-500 text-white' :
+                                    'bg-gray-400 text-white'
+                                  }`}>
+                                    {Math.round(row._confidence * 100)}%
+                                  </div>
+                                  {row._matchReason && (
+                                    <div 
+                                      className="text-xs text-gray-600 max-w-20 truncate cursor-help" 
+                                      title={`Match Reason: ${row._matchReason}`}
+                                    >
+                                      💡 {row._matchReason.length > 15 ? row._matchReason.substring(0, 15) + '...' : row._matchReason}
+                                    </div>
+                                  )}
+                                </div>
+                              </td>
+                            )}
+                            
+                            {Object.keys(queryResults[0]).filter(key => !key.startsWith('_')).map((key, j) => {
                               let cellValue = row[key];
                               
                               // Handle DuckDB proxy objects
@@ -1517,8 +1945,14 @@ const SqlAnalysis = () => {
                               }
                               
                               return (
-                                <td key={j} className="p-2 text-gray-600 max-w-48 truncate">
-                                  {displayValue}
+                                <td 
+                                  key={j} 
+                                  className="p-2 text-gray-600"
+                                  style={{ width: columnWidths[key] || 150, minWidth: '50px' }}
+                                >
+                                  <div className="truncate" title={displayValue}>
+                                    {displayValue}
+                                  </div>
                                 </td>
                               );
                             })}
@@ -1530,10 +1964,147 @@ const SqlAnalysis = () => {
                 </div>
               </div>
             )}
-          </div>
-        </div>
 
-        {/* Paste Data Modal */}
+            {/* AI Analysis Results - NOW APPEARS AFTER Query Results */}
+            {analysisResults && (
+              <div className="bg-gradient-to-br from-blue-50 to-indigo-50 border border-blue-200 rounded-2xl p-6 shadow-sm">
+                <h3 className="text-lg font-semibold text-blue-900 mb-4 flex items-center">
+                  <div className="w-6 h-6 bg-blue-600 rounded-full flex items-center justify-center mr-2">
+                    <span className="text-white text-xs">🧠</span>
+                  </div>
+                  AI Analysis Results
+                </h3>
+                
+                <div className="space-y-4">
+                  {/* Analysis Method */}
+                  <div className="bg-white/60 rounded-lg p-4 border border-blue-100">
+                    <h4 className="font-semibold text-blue-800 mb-2">Analysis Method</h4>
+                    <div className="flex items-center gap-2">
+                      <p className="text-blue-700 capitalize">{analysisResults.method?.replace(/_/g, ' ')}</p>
+                      {analysisResults.method === 'semantic_batch_search' && (
+                        <span className="bg-green-100 text-green-800 text-xs font-medium px-2.5 py-0.5 rounded-full">
+                          Contextual AI Search
+                        </span>
+                      )}
+                    </div>
+                    {analysisResults.method === 'semantic_batch_search' && (
+                      <p className="text-blue-600 text-sm mt-2">
+                        🎯 Using AI's contextual understanding to find semantically relevant data
+                      </p>
+                    )}
+                  </div>
+
+                  {/* Statistics */}
+                  {analysisResults.statistics && (
+                    <div className="bg-white/60 rounded-lg p-4 border border-blue-100">
+                      <h4 className="font-semibold text-blue-800 mb-2">Statistics</h4>
+                      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                        {Object.entries(analysisResults.statistics).map(([key, value]) => (
+                          <div key={key} className="text-center">
+                            <p className="font-medium text-blue-900">
+                              {typeof value === 'number' && key.includes('confidence') 
+                                ? `${Math.round(value * 100)}%`
+                                : typeof value === 'number' 
+                                  ? Math.round(value * 100) / 100
+                                  : value
+                              }
+                            </p>
+                            <p className="text-blue-600 text-xs capitalize">
+                              {key.replace(/([A-Z])/g, ' $1').toLowerCase()}
+                            </p>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Summary */}
+                  {analysisResults.summary && (
+                    <div className="bg-white/60 rounded-lg p-4 border border-blue-100">
+                      <h4 className="font-semibold text-blue-800 mb-2">Summary</h4>
+                      <p className="text-blue-700">{analysisResults.summary}</p>
+                    </div>
+                  )}
+
+                  {/* Key Insights */}
+                  {analysisResults.keyInsights && analysisResults.keyInsights.length > 0 && (
+                    <div className="bg-white/60 rounded-lg p-4 border border-blue-100">
+                      <h4 className="font-semibold text-blue-800 mb-2">Key Insights</h4>
+                      <ul className="text-blue-700 space-y-1">
+                        {analysisResults.keyInsights.map((insight, index) => (
+                          <li key={index} className="flex items-start">
+                            <span className="text-blue-500 mr-2">•</span>
+                            <span>{insight}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                  
+                  {/* Results Summary */}
+                  <div className="bg-white/60 rounded-lg p-4 border border-blue-100">
+                    <div className="flex items-center justify-between">
+                      <h4 className="font-semibold text-blue-800">Results</h4>
+                      {analysisResults.method === 'intelligent_analysis' && (
+                        <div className="flex gap-2">
+                          <button
+                            onClick={processWithRowByRow}
+                            className="bg-purple-600 hover:bg-purple-700 text-white px-3 py-1.5 rounded-lg text-sm font-medium transition-colors flex items-center gap-1"
+                            title="Process with Row-by-Row Analysis for detailed insights"
+                          >
+                            <ArrowRight className="w-3 h-3" />
+                            Process Row-by-Row
+                          </button>
+                          <button
+                            onClick={processAsNewSheet}
+                            className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-lg text-sm font-medium transition-colors flex items-center gap-1"
+                            title="Open as New Sheet for further analysis"
+                          >
+                            <ExternalLink className="w-3 h-3" />
+                            Use as New Sheet
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                    <p className="text-blue-700">
+                      Found {analysisResults.matches?.length || analysisResults.results?.length || 0} results
+                      {analysisResults.total && ` out of ${analysisResults.total} total rows`}
+                      {analysisResults.method === 'semantic_batch_search' && analysisResults.statistics?.averageConfidence && (
+                        <span className="ml-2 text-sm text-green-600">
+                          (avg confidence: {Math.round(analysisResults.statistics.averageConfidence * 100)}%)
+                        </span>
+                      )}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Generated Query */}
+            {generatedQuery && (
+              <div className="bg-white/80 backdrop-blur-sm border border-gray-200/50 rounded-2xl p-6 shadow-sm">
+                <h3 className="text-lg font-semibold text-gray-900 mb-4">Generated SQL Query</h3>
+                <div className="bg-gray-900 text-green-400 p-4 rounded-lg font-mono text-sm overflow-x-auto">
+                  {generatedQuery}
+                </div>
+                <button
+                  onClick={() => executeQuery()}
+                  className="mt-4 bg-green-600 hover:bg-green-700 text-white py-2 px-4 rounded-lg font-medium transition-colors"
+                >
+                  Re-run Query
+                </button>
+              </div>
+            )}
+
+            {/* Error Display */}
+            {error && (
+              <div className="bg-red-50 border border-red-200 rounded-2xl p-6">
+                <h3 className="text-lg font-semibold text-red-900 mb-2">Error</h3>
+                <p className="text-red-700">{error}</p>
+              </div>
+            )}
+
+            {/* Paste Data Modal */}
         <PasteModal
           showPasteMode={showPasteMode}
           pasteData={pasteData}
@@ -1545,6 +2116,8 @@ const SqlAnalysis = () => {
           }}
         />
       </div>
+    </div>
+    </div>
     </div>
   );
 };

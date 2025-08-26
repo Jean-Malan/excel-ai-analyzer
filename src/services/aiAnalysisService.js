@@ -1,5 +1,6 @@
 import { DynamicPatternDetection } from './dynamicPatternDetection.js';
 import DynamicCategoryManager from './dynamicCategoryManager.js';
+import { SemanticBatchSearchService } from './semanticBatchSearch.js';
 
 /**
  * AI Analysis Service
@@ -13,6 +14,7 @@ export class AIAnalysisService {
     this.logger = logger || (() => {}); // Default no-op logger
     this.patternDetector = new DynamicPatternDetection(apiKey, model, logger);
     this.categoryManager = new DynamicCategoryManager(apiKey, model, logger);
+    this.semanticSearchService = new SemanticBatchSearchService(apiKey, model, logger);
   }
 
   // Utility function to safely stringify objects with BigInt values
@@ -34,23 +36,71 @@ export class AIAnalysisService {
   /**
    * Main entry point - AI chooses the best analysis strategy
    */
-  async analyzeQuestion(userQuestion, schema, sampleData, database) {
+  async analyzeQuestion(userQuestion, schema, sampleData, database, callbacks = {}) {
+    console.log('🔥 ANALYZE QUESTION CALLED:', userQuestion);
+    
     if (!this.apiKey || !userQuestion) {
       throw new Error('API key and question are required');
     }
 
-    // Step 1: Let AI choose the analysis strategy
+    // Check if user has explicitly enabled semantic search through the toggle
+    const semanticConfig = callbacks.semanticConfig || {};
+    const isSemanticEnabled = semanticConfig.enabled === true;
+    
+    // Force semantic batch search if user has explicitly enabled it via the UI toggle
+    if (isSemanticEnabled) {
+      console.log('🎯 FORCING SEMANTIC BATCH SEARCH due to user toggle being enabled');
+      const forceStrategy = { 
+        method: 'semantic_batch_search', 
+        reasoning: 'User explicitly enabled semantic search via UI toggle' 
+      };
+      return await this.executeSemanticBatchSearch(userQuestion, schema, database, forceStrategy, callbacks);
+    }
+
+    // Let AI choose the optimal strategy based on the query type
+    // This allows SQL computational queries to use efficient DuckDB functions
+    
+    // Step 1: Let AI choose the analysis strategy (for other queries)
     const strategy = await this.determineAnalysisStrategy(userQuestion, schema, sampleData);
+    
+    console.log('🎯 STRATEGY CHOSEN:', strategy.method, 'for query:', userQuestion.substring(0, 50));
     
     // Step 2: Execute the chosen strategy
     switch (strategy.method) {
       case 'row_by_row_ai':
-        return await this.executeRowByRowAI(userQuestion, schema, database, strategy);
+        console.log('✅ EXECUTING ROW-BY-ROW AI');
+        return await this.executeRowByRowAI(userQuestion, schema, database, strategy, callbacks.options || {});
       case 'batch_ai':
+        console.log('✅ EXECUTING BATCH AI');
         return await this.executeBatchAI(userQuestion, schema, database, strategy);
+      case 'semantic_batch_search':
+        console.log('✅ EXECUTING SEMANTIC BATCH SEARCH');
+        return await this.executeSemanticBatchSearch(userQuestion, schema, database, strategy, callbacks);
       case 'sql_computational':
-        return await this.executeSQLComputational(userQuestion, schema, database, strategy);
+        console.log('✅ EXECUTING SQL COMPUTATIONAL');
+        try {
+          return await this.executeSQLComputational(userQuestion, schema, database, strategy);
+        } catch (error) {
+          // If SQL computational fails due to malformed queries, fall back to row-by-row analysis
+          if (error.message.includes('SQL query is incomplete') || 
+              error.message.includes('SELECT clause without selection list') ||
+              error.message.includes('syntax error') ||
+              error.message.includes('invalid backslashes')) {
+            console.log('⚠️ SQL computational failed, falling back to row-by-row analysis:', error.message);
+            this.log('warning', '⚠️ SQL computational failed, switching to row-by-row analysis', { 
+              error: error.message,
+              originalStrategy: strategy.method 
+            });
+            
+            // Create a fallback strategy for row-by-row analysis
+            const fallbackStrategy = { method: 'row_by_row_ai' };
+            return await this.executeRowByRowAI(userQuestion, schema, database, fallbackStrategy, callbacks.options || {});
+          }
+          // Re-throw other errors
+          throw error;
+        }
       case 'hybrid':
+        console.log('✅ EXECUTING HYBRID');
         return await this.executeHybrid(userQuestion, schema, database, strategy);
       default:
         throw new Error(`Unknown analysis method: ${strategy.method}`);
@@ -61,6 +111,7 @@ export class AIAnalysisService {
    * AI determines the best analysis approach
    */
   async determineAnalysisStrategy(userQuestion, schema, sampleData) {
+    console.log('🎯 DETERMINING STRATEGY FOR:', userQuestion);
     this.log('info', '🎯 Determining optimal analysis strategy...', { question: userQuestion, schemaColumns: schema.length });
     
     const schemaDescription = schema.map(col => 
@@ -82,7 +133,10 @@ ${schema.map(col => `"${col.name}"`).join(', ')}
 Sample Data:
 ${sampleData.map((row, i) => `Row ${i + 1}: ${row.join(', ')}`).join('\n')}
 
-CRITICAL ANALYSIS: If the question contains words like "optimal", "best", "minimum cost", "cheapest", "picking list", "recommendation", you MUST choose "hybrid".
+CRITICAL ANALYSIS: 
+- If the question contains words like "optimal", "best", "minimum cost", "cheapest", "picking list", "recommendation", you MUST choose "hybrid".
+- If the question asks about relationships, similarity, or finding items "like" something, you MUST choose "semantic_batch_search".
+- Keywords that REQUIRE semantic_batch_search: "relate to", "similar to", "like", "anything similar", "items that", "equipment like", "tools like".
 
 Choose the BEST analysis method:
 
@@ -94,15 +148,25 @@ Choose the BEST analysis method:
    - Use for: Pattern recognition across multiple rows, categorization
    - Example: "Group similar projects", "Find related items"
 
-3. "sql_computational" - When it's a pure data/math question with simple results
+3. "semantic_batch_search" - When you need contextual/semantic search across the dataset
+   - Use for: Finding items by meaning, context, relationships, similarity, or categories (NOT pattern matching)
+   - PERFECT for: "Find all office supplies", "Get stationary items", "Show kitchen equipment", "Find similar products"
+   - CRITICAL KEYWORDS: "relate to", "similar", "like", "anything similar", "equipment", "tools", "items that"
+   - Example: "Find all stationary items", "what items relate to cutting equipment like scissors", "items similar to a scalpel", "Show outdoor gear"
+   - ADVANTAGE: Uses LLM's contextual understanding instead of keyword matching - understands synonyms and relationships
+   - AVOID for: Exact matches, mathematical calculations, or simple filtering
+   - ALWAYS choose this for queries asking about relationships, similarity, or conceptual groupings
+
+4. "sql_computational" - When it's a pure data/math question with simple results
    - Use for: Counts, averages, sums, duplicates, statistical analysis, string operations
    - Example: "How many rows?", "Find duplicates", "Calculate average", "sum semicolon-separated numbers"
    - AVOID for: Complex optimization, multi-step business logic, large result sets, window functions in WHERE clause
-   - NEVER use for: "optimal", "best cost", "minimum cost", "picking lists", "recommendations"  
+   - NEVER use for: "optimal", "best cost", "minimum cost", "picking lists", "recommendations"
+   - CRITICAL: NEVER use for semantic queries like "relate to", "similar to", "like" - these need semantic_batch_search
    - PERFECT for semicolon-separated values: Use DuckDB's string_split and array functions
    - For summary rows: Use ROLLUP, GROUPING SETS, or separate aggregation queries - NEVER mismatched UNION
 
-4. "hybrid" - When you need SQL first, then AI analysis
+5. "hybrid" - When you need SQL first, then AI analysis
    - Use for: Complex optimization, business logic, multi-step analysis, large datasets
    - PERFECT for: Cost optimization, recommendation systems, complex decision making, window function logic
    - REQUIRED for: Any query with "optimal", "best cost", "minimum cost", "picking lists", "recommendations"
@@ -190,7 +254,8 @@ Respond in JSON:
   /**
    * Method 1: Row-by-row AI analysis with intelligent row vs column detection
    */
-  async executeRowByRowAI(userQuestion, schema, database, strategy) {
+  async executeRowByRowAI(userQuestion, schema, database, strategy, options = {}) {
+    console.log('🔍 STARTING ROW-BY-ROW AI ANALYSIS:', { userQuestion, options });
     this.log('info', '🔍 Starting row-by-row AI analysis...', { strategy: strategy.method });
     
     const conn = await database.connect();
@@ -231,16 +296,23 @@ Respond in JSON:
     // Determine query type with priority: transformation > column-specific > holistic
     this.log('info', '🔍 QUERY TYPE DETECTION: Starting query type analysis', { userQuestion });
     
-    const isDataTransformation = await this.isDataTransformationQuery(userQuestion, schema, data.values.slice(0, 2));
+    // Create sample data for transformation detection (first 2 rows as arrays)
+    const sampleRowsAsArrays = rows.slice(0, 2).map(row => Object.values(row));
+    const isDataTransformation = await this.isDataTransformationQuery(userQuestion, schema, sampleRowsAsArrays);
     this.log('info', `📊 TRANSFORMATION CHECK: ${isDataTransformation}`, { isDataTransformation, userQuestion });
     
-    const isColumnQuery = !isDataTransformation && this.isColumnSpecificQuery(userQuestion);
-    this.log('info', `📋 COLUMN QUERY CHECK: ${isColumnQuery}`, { isColumnQuery, userQuestion, transformationOverride: isDataTransformation });
+    // TEMPORARY OVERRIDE: Force disable transformation detection for testing batch processing
+    const forceDisableTransformation = true;
+    const actualIsDataTransformation = forceDisableTransformation ? false : isDataTransformation;
+    this.log('warning', `🚨 TEMPORARY OVERRIDE: Forcing isDataTransformation=${actualIsDataTransformation} (was ${isDataTransformation})`);
     
-    const queryType = isDataTransformation ? 'Data-transformation' : isColumnQuery ? 'Column-specific' : 'Row-holistic';
+    const isColumnQuery = !actualIsDataTransformation && this.isColumnSpecificQuery(userQuestion);
+    this.log('info', `📋 COLUMN QUERY CHECK: ${isColumnQuery}`, { isColumnQuery, userQuestion, transformationOverride: actualIsDataTransformation });
+    
+    const queryType = actualIsDataTransformation ? 'Data-transformation' : isColumnQuery ? 'Column-specific' : 'Row-holistic';
     this.log('success', `🎯 FINAL QUERY TYPE: ${queryType}`, { 
       userQuestion,
-      isDataTransformation, 
+      isDataTransformation: actualIsDataTransformation, 
       isColumnQuery,
       finalType: queryType
     });
@@ -248,9 +320,10 @@ Respond in JSON:
     let columnAnalysis = {};
     
     // Only do column analysis if it's a column-specific query (not for transformations)
-    if (isColumnQuery && !isDataTransformation) {
+    if (isColumnQuery && !actualIsDataTransformation) {
       this.log('info', '🔬 Starting column pattern analysis for column-specific query...');
-      for (const col of data.columns) {
+      const columns = Object.keys(rows[0] || {});
+      for (const col of columns) {
         const columnValues = rows.map(row => row[col]).filter(val => val != null && val !== '');
         if (columnValues.length > 0) {
           try {
@@ -267,7 +340,7 @@ Respond in JSON:
         }
       }
       this.log('success', `✅ Column analysis complete for ${Object.keys(columnAnalysis).length} columns`, { analyzedColumns: Object.keys(columnAnalysis) });
-    } else if (isDataTransformation) {
+    } else if (actualIsDataTransformation) {
       this.log('info', '🔧 Skipping complex pattern analysis for data transformation task');
     } else {
       this.log('info', '⚡ Skipping column analysis - using direct row analysis for better performance');
@@ -277,141 +350,317 @@ Respond in JSON:
     const totalRows = rows.length;
     let processed = 0;
 
-    this.log('info', `🔄 Starting ${isColumnQuery ? 'column-aware' : isDataTransformation ? 'data-transformation' : 'holistic'} row processing of ${totalRows} rows...`);
+    this.log('info', `🔄 Starting ${isColumnQuery ? 'column-aware' : actualIsDataTransformation ? 'data-transformation' : 'holistic'} row processing of ${totalRows} rows...`);
 
-    // Process each row
-    for (const row of rows) {
-      try {
-        let hasMatch = false;
-        let bestConfidence = 0;
-        let bestReasoning = '';
-        let matchDetails = {};
+    // BATCH DECISION: Use batch processing UNLESS dynamic categorization is enabled
+    const useDynamicCategories = options.useDynamicCategories === true;
+    const useBatch = !useDynamicCategories; // Only batch when NOT using dynamic categories
+    const batchSize = useBatch ? 8 : 1; // Sequential processing when using categories
+    
+    console.log('🚀 BATCH MODE:', useBatch ? 'ENABLED' : 'DISABLED', `(batchSize: ${batchSize})`);
+    
+    if (useBatch) {
+      console.log('🚀 Will process', totalRows, 'rows in batches of', batchSize);
+    } else {
+      console.log('🔄 Will process rows individually for dynamic categorization');
+    }
+    
+    // Process rows either in batches or sequentially based on categorization needs
+    this.log('info', `⚡ ${useBatch ? 'BATCH' : 'SEQUENTIAL'} PROCESSING: Processing ${totalRows} rows ${useBatch ? `in batches of ${batchSize}` : 'sequentially'}`);
+    
+    for (let i = 0; i < totalRows; i += batchSize) {
+      const batch = rows.slice(i, Math.min(i + batchSize, totalRows));
+      
+      if (useBatch && !actualIsDataTransformation && batch.length > 1) {
+        // TRUE BATCH PROCESSING - Send multiple rows to AI in a single call
+        console.log('🚀 BATCH PROCESSING:', batch.length, 'rows in single AI call');
+        
+        try {
+          const batchData = batch.map((row, idx) => 
+            `Row ${i + idx + 1}: ${Object.entries(row).map(([k,v]) => `${k}="${v}"`).join(', ')}`
+          ).join('\n');
 
-        if (isDataTransformation) {
-          // Data transformation: direct task-focused processing
-          this.log('info', `🔧 PROCESSING ROW ${processed + 1} AS TRANSFORMATION`, { rowData: Object.keys(row), userQuestion });
-          const transformedRow = await this.dataTransformationAnalysis(row, userQuestion);
-          this.log('debug', '✅ TRANSFORMATION COMPLETE FOR ROW', { transformedKeys: Object.keys(transformedRow || {}), confidence: transformedRow?.confidence });
+          const batchPrompt = `Analyze these ${batch.length} rows for the question: "${userQuestion}"
+
+${batchData}
+
+For each row, determine if it matches the criteria and provide analysis.
+
+IMPORTANT: Return ONLY valid JSON with properly escaped strings.
+
+Respond with JSON array:
+[
+  {
+    "rowNumber": 1,
+    "matches": true/false,
+    "confidence": 0.0-1.0,
+    "reasoning": "Brief explanation"
+  },
+  ...
+]`;
+
+          const result = await this.callOpenAI(batchPrompt, 0.2);
+          const batchAnalysis = this.parseJSONResponse(result.content);
           
-          hasMatch = true; // Always include all rows for transformation tasks
-          bestConfidence = transformedRow.confidence || 1.0;
-          bestReasoning = transformedRow.reasoning || 'Data transformation applied';
-          matchDetails = transformedRow;
-        } else if (isColumnQuery) {
-          // Column-specific analysis: check individual columns
-          const relevantValues = Object.entries(row)
-            .filter(([key, value]) => value != null && value !== '')
-            .map(([key, value]) => ({ column: key, value: String(value) }));
-
-          for (const { column, value } of relevantValues) {
-            try {
-              const patternMatch = await this.patternDetector.matchesPattern(
-                value, 
-                userQuestion, 
-                `Column: ${column}, Pattern context: ${JSON.stringify(columnAnalysis[column]?.insights || {})}`
-              );
-
-              if (patternMatch.matches && patternMatch.confidence > bestConfidence) {
-                hasMatch = true;
-                bestConfidence = patternMatch.confidence;
-                bestReasoning = patternMatch.reasoning;
-                matchDetails = {
-                  matchingColumn: column,
-                  matchingValue: value,
-                  patternInfo: columnAnalysis[column],
-                  ...patternMatch
-                };
+          // Process batch results
+          const batchResults = batch.map((row, batchIndex) => {
+            const analysis = batchAnalysis[batchIndex] || { matches: false, confidence: 0, reasoning: 'No analysis available' };
+            
+            return {
+              hasMatch: analysis.matches,
+              row: {
+                ...row,
+                _aiAnalysis: {
+                  matches: analysis.matches,
+                  confidence: analysis.confidence,
+                  reasoning: analysis.reasoning,
+                  matchDetails: analysis
+                }
               }
-            } catch (error) {
-              // Fallback to simple analysis if pattern detection fails
-              const simpleMatch = await this.simpleRowAnalysis(row, userQuestion);
-              if (simpleMatch.matches && simpleMatch.confidence > bestConfidence) {
-                hasMatch = true;
-                bestConfidence = simpleMatch.confidence;
-                bestReasoning = simpleMatch.reasoning;
-                matchDetails = simpleMatch;
-              }
+            };
+          });
+
+          // Add successful matches to results
+          batchResults.forEach(result => {
+            if (result.hasMatch) {
+              matchingRows.push(result.row);
+            }
+          });
+
+        } catch (error) {
+          this.log('warning', `⚠️ Batch processing failed, falling back to individual processing: ${error.message}`);
+          
+          // Fallback to individual processing
+          for (let batchIndex = 0; batchIndex < batch.length; batchIndex++) {
+            const row = batch[batchIndex];
+            const rowMatch = await this.simpleRowAnalysis(row, userQuestion);
+            
+            if (rowMatch.matches) {
+              matchingRows.push({
+                ...row,
+                _aiAnalysis: {
+                  matches: rowMatch.matches,
+                  confidence: rowMatch.confidence,
+                  reasoning: rowMatch.reasoning,
+                  matchDetails: rowMatch
+                }
+              });
             }
           }
-        } else {
-          // Holistic row analysis: send entire row to AI
-          const rowMatch = await this.simpleRowAnalysis(row, userQuestion);
-          if (rowMatch.matches) {
-            hasMatch = true;
-            bestConfidence = rowMatch.confidence;
-            bestReasoning = rowMatch.reasoning;
-            matchDetails = rowMatch;
-          }
         }
+        
+      } else {
+        // INDIVIDUAL PROCESSING - Process each row separately (for categories or transformations)
+        console.log('🔄 INDIVIDUAL PROCESSING:', batch.length, 'row(s)');
+        this.log('info', `🔄 INDIVIDUAL: Processing ${batch.length} row(s) individually`);
+        
+        const batchPromises = batch.map(async (row, batchIndex) => {
+          let hasMatch = false;
+          let bestConfidence = 0;
+          let bestReasoning = '';
+          let matchDetails = {};
 
-        if (hasMatch) {
-          this.log('success', `✅ Row ${processed + 1} ${isDataTransformation ? 'transformed' : 'matched'}! Confidence: ${(bestConfidence * 100).toFixed(1)}%`, {
-            matchingColumn: matchDetails.matchingColumn,
-            matchingValue: matchDetails.matchingValue,
-            reasoning: bestReasoning
-          });
-          
-          // For data transformation, use the transformed row directly
-          if (isDataTransformation && matchDetails && typeof matchDetails === 'object') {
-            // Remove confidence and reasoning from the actual data
-            const { confidence, reasoning, ...transformedData } = matchDetails;
-            matchingRows.push({
-              ...transformedData,
-              _aiAnalysis: {
-                matches: true,
-                confidence: bestConfidence,
-                reasoning: bestReasoning,
-                transformationType: 'data_transformation'
+          if (actualIsDataTransformation) {
+            const transformedRow = await this.dataTransformationAnalysis(row, userQuestion);
+            hasMatch = true;
+            bestConfidence = transformedRow.confidence || 1.0;
+            bestReasoning = transformedRow.reasoning || 'Data transformation applied';
+            matchDetails = transformedRow;
+            
+            const { confidence, reasoning, ...transformedData } = transformedRow;
+            return {
+              hasMatch,
+              row: {
+                ...transformedData,
+                _aiAnalysis: {
+                  matches: true,
+                  confidence: bestConfidence,
+                  reasoning: bestReasoning,
+                  transformationType: 'data_transformation'
+                }
               }
-            });
+            };
           } else {
-            matchingRows.push({
-              ...row,
-              _aiAnalysis: {
-                matches: true,
-                confidence: bestConfidence,
-                reasoning: bestReasoning,
-                matchDetails: matchDetails
+            // Regular row analysis
+            const rowMatch = await this.simpleRowAnalysis(row, userQuestion);
+            if (rowMatch.matches) {
+              hasMatch = true;
+              bestConfidence = rowMatch.confidence;
+              bestReasoning = rowMatch.reasoning;
+              matchDetails = rowMatch;
+            }
+            
+            return {
+              hasMatch,
+              row: {
+                ...row,
+                _aiAnalysis: {
+                  matches: hasMatch,
+                  confidence: bestConfidence,
+                  reasoning: bestReasoning,
+                  matchDetails: matchDetails
+                }
               }
-            });
+            };
           }
-        } else {
-          if (processed % 10 === 0) { // Log every 10th row to avoid spam
-            this.log('debug', `Processing progress: ${processed + 1}/${totalRows} rows`);
+        });
+        
+        // Wait for all rows in batch to complete
+        const batchResults = await Promise.all(batchPromises);
+        
+        // Add successful matches to results
+        batchResults.forEach(result => {
+          if (result.hasMatch) {
+            matchingRows.push(result.row);
           }
-        }
-        
-        processed++;
-        
-        // Rate limiting - shorter delay for holistic analysis
-        await this.sleep(isColumnQuery ? 300 : 200);
-        
-      } catch (error) {
-        this.log('error', `❌ Failed to analyze row ${processed + 1}: ${error.message}`);
-        console.warn(`Failed to analyze row ${processed}:`, error);
-        processed++;
+        });
       }
+      
+      processed += batch.length;
+      this.log('info', `📊 Batch ${Math.floor(i / batchSize) + 1} completed: ${processed}/${totalRows} rows processed, ${matchingRows.length} matches found`);
     }
 
     this.log('info', `🎯 Row processing complete: ${matchingRows.length} matches found out of ${totalRows} total rows`);
-    this.log('info', '🧠 Generating final insights...');
 
-    const insights = await this.generateRowAnalysisInsights(matchingRows, columnAnalysis, userQuestion);
-    
-    this.log('success', '🎉 Row-by-row AI analysis complete!', {
-      totalProcessed: totalRows,
-      totalMatches: matchingRows.length,
-      matchRate: `${((matchingRows.length / totalRows) * 100).toFixed(1)}%`,
-      analysisType: isColumnQuery ? 'column-specific' : 'holistic'
+    // Generate summary and return results
+    const totalProcessed = processed;
+    const matchRate = (matchingRows.length / totalProcessed * 100).toFixed(1);
+
+    const summary = actualIsDataTransformation 
+      ? `Transformed ${totalProcessed} rows using AI analysis`
+      : `Found ${matchingRows.length} matching rows out of ${totalProcessed} total rows (${matchRate}% match rate)`;
+
+    this.log('success', `✅ Analysis complete: ${summary}`, {
+      totalRows: totalProcessed,
+      matchingRows: matchingRows.length,
+      matchRate: `${matchRate}%`
     });
 
     return {
+      rows: matchingRows,
+      summary,
       method: 'row_by_row_ai',
-      matches: matchingRows,
-      total: totalRows,
-      columnAnalysis: columnAnalysis,
-      summary: `Found ${matchingRows.length} matching rows out of ${totalRows} total rows using ${isColumnQuery ? 'column-aware' : 'holistic'} AI analysis.`,
-      insights: insights
+      queryType: queryType,
+      columnAnalysis: Object.keys(columnAnalysis).length > 0 ? columnAnalysis : null,
+      metrics: {
+        totalRows: totalProcessed,
+        matchingRows: matchingRows.length,
+        matchRate: parseFloat(matchRate)
+      }
+    };
+  }
+
+  /**
+   * Process a single row for row-by-row analysis (used in both sequential and batch processing)
+   */
+  async processSingleRow(row, globalIndex, userQuestion, isColumnQuery, isDataTransformation, columnAnalysis) {
+    let hasMatch = false;
+    let bestConfidence = 0;
+    let bestReasoning = '';
+    let matchDetails = {};
+
+    if (isDataTransformation) {
+      // Data transformation: direct task-focused processing
+      this.log('info', `🔧 PROCESSING ROW ${globalIndex + 1} AS TRANSFORMATION`, { rowData: Object.keys(row), userQuestion });
+      const transformedRow = await this.dataTransformationAnalysis(row, userQuestion);
+      this.log('debug', '✅ TRANSFORMATION COMPLETE FOR ROW', { transformedKeys: Object.keys(transformedRow || {}), confidence: transformedRow?.confidence });
+      
+      hasMatch = true; // Always include all rows for transformation tasks
+      bestConfidence = transformedRow.confidence || 1.0;
+      bestReasoning = transformedRow.reasoning || 'Data transformation applied';
+      matchDetails = transformedRow;
+      
+      // For data transformation, return the transformed row directly
+      const { confidence, reasoning, ...transformedData } = transformedRow;
+      return {
+        hasMatch,
+        bestConfidence,
+        bestReasoning,
+        matchDetails,
+        row: {
+          ...transformedData,
+          _aiAnalysis: {
+            matches: true,
+            confidence: bestConfidence,
+            reasoning: bestReasoning,
+            transformationType: 'data_transformation'
+          }
+        }
+      };
+    } else if (isColumnQuery) {
+      // Column-specific analysis: check individual columns
+      const relevantValues = Object.entries(row)
+        .filter(([key, value]) => value != null && value !== '')
+        .map(([key, value]) => ({ column: key, value: String(value) }));
+
+      for (const { column, value } of relevantValues) {
+        try {
+          const patternMatch = await this.patternDetector.matchesPattern(
+            value, 
+            userQuestion, 
+            `Column: ${column}, Pattern context: ${JSON.stringify(columnAnalysis[column]?.insights || {})}`
+          );
+
+          if (patternMatch.matches && patternMatch.confidence > bestConfidence) {
+            hasMatch = true;
+            bestConfidence = patternMatch.confidence;
+            bestReasoning = patternMatch.reasoning;
+            matchDetails = {
+              matchingColumn: column,
+              matchingValue: value,
+              patternInfo: columnAnalysis[column],
+              ...patternMatch
+            };
+          }
+        } catch (error) {
+          // Fallback to simple analysis if pattern detection fails
+          const simpleMatch = await this.simpleRowAnalysis(row, userQuestion);
+          if (simpleMatch.matches && simpleMatch.confidence > bestConfidence) {
+            hasMatch = true;
+            bestConfidence = simpleMatch.confidence;
+            bestReasoning = simpleMatch.reasoning;
+            matchDetails = simpleMatch;
+          }
+        }
+      }
+    } else {
+      // Holistic row analysis: send entire row to AI
+      const rowMatch = await this.simpleRowAnalysis(row, userQuestion);
+      if (rowMatch.matches) {
+        hasMatch = true;
+        bestConfidence = rowMatch.confidence;
+        bestReasoning = rowMatch.reasoning;
+        matchDetails = rowMatch;
+      }
+    }
+
+    // Log successful matches
+    if (hasMatch) {
+      this.log('success', `✅ Row ${globalIndex + 1} matched! Confidence: ${(bestConfidence * 100).toFixed(1)}%`, {
+        matchingColumn: matchDetails.matchingColumn,
+        matchingValue: matchDetails.matchingValue,
+        reasoning: bestReasoning
+      });
+    } else {
+      if (globalIndex % 10 === 0) { // Log every 10th row to avoid spam
+        this.log('debug', `Processing progress: ${globalIndex + 1} rows processed`);
+      }
+    }
+
+    return {
+      hasMatch,
+      bestConfidence,
+      bestReasoning,
+      matchDetails,
+      row: {
+        ...row,
+        _aiAnalysis: {
+          matches: hasMatch,
+          confidence: bestConfidence,
+          reasoning: bestReasoning,
+          matchDetails: matchDetails
+        }
+      }
     };
   }
 
@@ -462,12 +711,20 @@ Examples of NON-transformation requests:
 - "Find all rows containing French text" (filtering/searching)
 - "Show me duplicate records" (analysis)
 - "Count how many rows have high values" (aggregation)
+- "Classify if this is a cutting equipment or not" (classification/analysis)
+- "Identify which items are tools" (categorization/filtering)
+- "Find items that match criteria" (searching/filtering)
+
+CRITICAL DISTINCTION:
+- TRANSFORMATION: Modifies the actual data values or structure and returns a modified dataset
+- CLASSIFICATION/ANALYSIS: Uses AI to identify/find/filter rows based on criteria but doesn't modify the original data
 
 IMPORTANT: Pay special attention to requests about:
-- Semicolon-separated values/numbers
-- Mathematical operations on delimited data
-- Requests to "return the whole sheet" or "return back"
-- Data parsing and transformation
+- Semicolon-separated values/numbers (usually transformation)
+- Mathematical operations on delimited data (usually transformation)
+- Requests to "return the whole sheet" or "return back" (usually transformation)
+- Data parsing and transformation (usually transformation)
+- Classification, identification, finding items (usually NOT transformation)
 
 IMPORTANT: Return ONLY valid JSON with properly escaped strings.
 
@@ -678,7 +935,102 @@ Provide insights in JSON:
   }
 
   /**
-   * Method 2: Batch AI analysis
+   * Method 2: Semantic Batch Search - Contextual understanding across all data
+   */
+  async executeSemanticBatchSearch(userQuestion, schema, database, strategy, callbacks = {}) {
+    this.log('info', '🔍 Starting semantic batch search analysis...', { strategy: strategy.method });
+    
+    // Get all data from the database
+    const conn = await database.connect();
+    const result = await conn.query("SELECT * FROM excel_data");
+    await conn.close();
+    
+    if (!result.numRows) {
+      this.log('warning', '⚠️ No data found in database');
+      return { 
+        method: 'semantic_batch_search',
+        matches: [], 
+        summary: "No data found",
+        statistics: { totalRowsProcessed: 0, totalMatches: 0, averageConfidence: 0 }
+      };
+    }
+
+    // Convert DuckDB result to clean array format
+    const rawArray = result.toArray();
+    const rows = rawArray.map(row => {
+      const cleanRow = {};
+      Object.entries(row).forEach(([key, value]) => {
+        if (typeof value === 'bigint') {
+          cleanRow[key] = value <= Number.MAX_SAFE_INTEGER ? Number(value) : value.toString();
+        } else if (typeof value === 'string' && value.startsWith('"') && value.endsWith('"')) {
+          cleanRow[key] = value.slice(1, -1);
+        } else {
+          cleanRow[key] = value;
+        }
+      });
+      return cleanRow;
+    });
+
+    // Configure search options with callbacks and semantic config
+    const semanticConfig = callbacks.semanticConfig || {};
+    
+    this.log('info', `📊 Processing ${rows.length} rows for semantic search`, {
+      totalRows: rows.length,
+      columns: schema.length,
+      searchColumns: semanticConfig.searchColumns?.length || schema.length,
+      returnColumns: semanticConfig.returnColumns?.length || schema.length,
+      minConfidence: semanticConfig.minConfidence || 0.7
+    });
+
+    try {
+      const searchOptions = {
+        maxRows: 2000,        // Limit for performance
+        minConfidence: semanticConfig.minConfidence || 0.7,   // Use configured or default confidence
+        maxConcurrentBatches: 5,  // Parallel processing limit
+        onBatchComplete: callbacks.onBatchComplete,  // Pass through batch completion callback
+        onProgressUpdate: callbacks.onProgressUpdate,  // Pass through progress callback
+        searchColumns: semanticConfig.searchColumns?.length > 0 ? semanticConfig.searchColumns : null,
+        returnColumns: semanticConfig.returnColumns?.length > 0 ? semanticConfig.returnColumns : null
+      };
+
+      // Use enhanced semantic search with pattern analysis
+      const searchResults = await this.semanticSearchService.enhancedSemanticSearch(
+        userQuestion,
+        rows,
+        schema,
+        searchOptions
+      );
+
+      this.log('success', '✅ Semantic batch search completed!', {
+        totalMatches: searchResults.matches?.length || 0,
+        averageConfidence: searchResults.statistics?.averageConfidence,
+        processingTime: Date.now() - searchResults.statistics?.processingTime
+      });
+
+      return {
+        method: 'semantic_batch_search',
+        query: userQuestion,
+        matches: searchResults.matches || [],
+        results: searchResults.matches || [], // For compatibility with existing UI
+        total: searchResults.statistics?.totalRowsProcessed || 0,
+        statistics: searchResults.statistics,
+        summary: searchResults.summary,
+        enhancements: searchResults.enhancements,
+        insights: searchResults.enhancements ? [
+          `Identified ${searchResults.enhancements.patterns?.length || 0} common patterns`,
+          `Found ${searchResults.statistics?.highConfidenceMatches || 0} high-confidence matches`,
+          `Processing strategy: ${searchResults.summary?.processingStrategy || 'Semantic batch processing'}`
+        ] : undefined
+      };
+
+    } catch (error) {
+      this.log('error', `❌ Semantic batch search failed: ${error.message}`);
+      throw new Error(`Semantic batch search failed: ${error.message}`);
+    }
+  }
+
+  /**
+   * Method 3: Batch AI analysis
    */
   async executeBatchAI(userQuestion, schema, database, strategy) {
     const conn = await database.connect();
@@ -854,6 +1206,28 @@ Return ONLY the corrected SQL query, no explanation:`;
         }
       }
       
+      // Clean up malformed SQL queries before execution
+      let cleanedQuery = strategy.sqlQuery;
+      
+      // Remove invalid escape sequences that cause parsing errors
+      if (cleanedQuery.includes('\\\\') || cleanedQuery.match(/SELECT\s*\\\\/)) {
+        this.log('warning', '⚠️ Detected malformed SQL with escape sequences, attempting to clean...');
+        cleanedQuery = cleanedQuery.replace(/\\\\+/g, ''); // Remove multiple backslashes
+        cleanedQuery = cleanedQuery.replace(/SELECT\s*\\\\/g, 'SELECT'); // Fix SELECT \\
+        cleanedQuery = cleanedQuery.replace(/\\\s/g, ' '); // Replace backslash-space with space
+        cleanedQuery = cleanedQuery.replace(/\\n/g, '\n'); // Fix newline escapes
+        cleanedQuery = cleanedQuery.trim(); // Remove leading/trailing whitespace
+        this.log('info', '🔧 Cleaned SQL query', { original: strategy.sqlQuery, cleaned: cleanedQuery });
+        strategy.sqlQuery = cleanedQuery;
+      }
+      
+      // Handle incomplete SELECT statements
+      if (cleanedQuery.trim() === 'SELECT' || cleanedQuery.match(/^SELECT\s*$/i)) {
+        this.log('warning', '⚠️ Detected incomplete SELECT statement, falling back to row-by-row analysis');
+        // Fall back to row-by-row analysis instead of trying to fix the broken SQL
+        throw new Error('SQL query is incomplete: SELECT clause without selection list. Switching to row-by-row analysis.');
+      }
+      
       this.log('debug', '📝 Running SQL query', { sqlQuery: strategy.sqlQuery });
       const conn = await database.connect();
       const result = await conn.query(strategy.sqlQuery);
@@ -957,6 +1331,14 @@ Provide insights in JSON:
         helpfulMessage = 'Regular expression functions are not supported. Use LIKE with % wildcards instead.';
       } else if (error.message.includes('no such table')) {
         helpfulMessage = 'Table not found. Make sure to use the table name "excel_data".';
+      } else if (error.message.includes('trim(STRUCT(unnest')) {
+        helpfulMessage = 'TRIM function cannot be applied to STRUCT type from unnest(). Cast the unnested values to VARCHAR first: trim(v::varchar) or use string functions differently.';
+      } else if (error.message.includes('regexp_split_to_table')) {
+        helpfulMessage = 'regexp_split_to_table function does not exist in DuckDB. Use string_split() or unnest(string_to_array()) instead.';
+      } else if (error.message.includes('syntax error at or near "\\"') || error.message.includes('SELECT \\\\')) {
+        helpfulMessage = 'SQL query contains invalid backslashes. The AI generated a malformed query with escape characters.';
+      } else if (error.message.includes('SELECT clause without selection list') || error.message.includes('SQL query is incomplete')) {
+        helpfulMessage = 'SQL query is incomplete - missing column selection. The AI generated an incomplete SELECT statement.';
       }
       
       throw new Error(`SQL execution failed: ${helpfulMessage}`);
@@ -1003,11 +1385,21 @@ Provide detailed analysis in JSON:
    * Utility: Call OpenAI API
    */
   async callOpenAI(prompt, temperature = 0.2) {
-    // GPT-5 models only support default temperature (1)
-    const isGPT5Model = this.model.toLowerCase().includes('gpt-5') || this.model.toLowerCase().includes('o4-mini');
-    const finalTemperature = isGPT5Model ? 1 : temperature;
+    // Newer models (GPT-4o, GPT-5, o1) only support default temperature (1) and shouldn't have temperature parameter set
+    const isNewerModel = this.model.toLowerCase().includes('gpt-4o') || this.model.toLowerCase().includes('gpt-5') || this.model.toLowerCase().includes('o1') || this.model.toLowerCase().includes('o4-mini');
     
-    this.log('debug', `🌡️ Using temperature: ${finalTemperature} (GPT-5 model: ${isGPT5Model})`);
+    const requestBody = {
+      model: this.model,
+      messages: [{ role: 'user', content: prompt }]
+    };
+    
+    // Only add temperature for older models
+    if (!isNewerModel) {
+      requestBody.temperature = temperature;
+      this.log('debug', `🌡️ Using temperature: ${temperature} (older model)`);
+    } else {
+      this.log('debug', `🌡️ Using default temperature (newer model: ${this.model})`);
+    }
     
     const response = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
@@ -1015,11 +1407,7 @@ Provide detailed analysis in JSON:
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${this.apiKey}`
       },
-      body: JSON.stringify({
-        model: this.model,
-        messages: [{ role: 'user', content: prompt }],
-        temperature: finalTemperature
-      })
+      body: JSON.stringify(requestBody)
     });
 
     if (!response.ok) {
@@ -1216,13 +1604,24 @@ Provide detailed analysis in JSON:
     let fixed = content
       // Remove line continuation backslashes that break JSON
       .replace(/\\\s*\n\s*/g, ' ')
+      
+      // CRITICAL: Fix the specific pattern causing the issue first
+      // Pattern: "field": \"value\" -> "field": "value"
+      .replace(/:\s*\\"([^"\\]*(?:\\.[^"\\]*)*)\\"(\s*[,}\]])/g, ': "$1"$2')
+      // Pattern: "field": \"value -> "field": "value"
+      .replace(/:\s*\\"([^"\\]*(?:\\.[^"\\]*)*)"(\s*[,}\]])/g, ': "$1"$2')
+      
       // Fix malformed escape sequences at end of property values
       // Pattern: "value\" should become "value"
       .replace(/([^\\])\\"(\s*,\s*\\?")/g, '$1"$2')
       .replace(/([^\\])\\"(\s*,\s*")/g, '$1"$2')
       // Fix broken escape sequences in property values like "hybrid\" -> "hybrid"
       .replace(/"([^"]*)\\"(\s*,\s*\\?"[^"]*":\s*)/g, '"$1"$2')
-      .replace(/"([^"]*)\\"(\s*,\s*"[^"]*":\s*)/g, '"$1"$2');
+      .replace(/"([^"]*)\\"(\s*,\s*"[^"]*":\s*)/g, '"$1"$2')
+      // CRITICAL: Fix specific semicolon-separated value escaping issues like \"1;3;4;8;"
+      .replace(/\\"([^"]*;[^"]*);"/g, '"$1"')
+      .replace(/\\"([^"]*;[^"]*);/g, '"$1')
+      .replace(/([0-9;]+);"/g, '$1"');
 
     // CRITICAL: Fix unescaped quotes inside JSON string values
     // This is a complex fix that preserves JSON structure while escaping internal quotes
@@ -1311,12 +1710,20 @@ Provide detailed analysis in JSON:
       // " "ProductName" " -> " \"ProductName\" "
       content = content.replace(/(\s)"([^"]{1,50})"(\s)/g, '$1\\"$2\\"$3');
       
-      // Pattern 3: Fix quotes in SQL examples and code snippets
+      // Pattern 3: Fix quotes in reasoning text like "The Notes field contains only a placeholder (" -- ")"
+      // This specifically handles the error case we're seeing
+      content = content.replace(/(:\s*"[^"]*\()"\s*--\s*"(\)[^"]*")/g, '$1\\" -- \\"$2');
+      
+      // Pattern 4: More general fix for quotes within JSON string values
+      // Look for pattern: "field": "text with "quoted" content"
+      content = content.replace(/(:\s*"[^"]*)"([^"]*)"([^"]*"(?:\s*[,}]))/g, '$1\\"$2\\"$3');
+      
+      // Pattern 5: Fix quotes in SQL examples and code snippets
       // More targeted approach for SQL strings
       content = content.replace(/(SELECT|FROM|WHERE|GROUP BY|ORDER BY)([^"]*)"([^"]*)"([^"]*)(SELECT|FROM|WHERE|;|,|\s)/g, 
         '$1$2\\"$3\\"$4$5');
       
-      // Pattern 4: Fix quotes in list-like structures  
+      // Pattern 6: Fix quotes in list-like structures  
       // ", "item1", "item2"," -> ", \"item1\", \"item2\","
       content = content.replace(/(,\s*)"([^"]{1,30})"(\s*,)/g, '$1\\"$2\\"$3');
       
@@ -1339,8 +1746,6 @@ Provide detailed analysis in JSON:
       // Extract the position of the error
       const positionMatch = error.message.match(/position (\d+)/);
       if (!positionMatch) return null;
-      
-      const errorPosition = parseInt(positionMatch[1]);
       
       // Try to identify all JSON fields and reconstruct them properly
       const fields = {
@@ -1671,6 +2076,39 @@ Provide detailed analysis in JSON:
               this.log('debug', '🔧 SQL-specific recovery failed, trying general recovery');
             }
           }
+        }
+      }
+      
+      // Strategy 0B: Fix missing comma in array elements
+      if (error.message.includes("Expected ',' or ']' after array element")) {
+        this.log('debug', '🔧 Attempting to fix missing comma in array');
+        
+        // Look for patterns like: "text" "text" that should be "text", "text"
+        if (beforeError.endsWith('"') && afterError.trim().startsWith('"')) {
+          const fixedContent = beforeError + ', ' + afterError;
+          try {
+            return JSON.parse(fixedContent);
+          } catch (e) {
+            // Continue to next strategy
+          }
+        }
+        
+        // Look for patterns like: } { that should be }, {
+        if (beforeError.endsWith('}') && afterError.trim().startsWith('{')) {
+          const fixedContent = beforeError + ', ' + afterError;
+          try {
+            return JSON.parse(fixedContent);
+          } catch (e) {
+            // Continue to next strategy
+          }
+        }
+        
+        // Insert comma at the error position as last resort
+        const insertCommaContent = content.substring(0, errorPosition) + ',' + content.substring(errorPosition);
+        try {
+          return JSON.parse(insertCommaContent);
+        } catch (e) {
+          // Continue to next strategy
         }
       }
       

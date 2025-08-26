@@ -50,10 +50,10 @@ const FileUpload = ({
                     📊 SDG Analysis Data (text.xlsx)
                   </button>
                   <button
-                    onClick={() => onDemoFileLoad('medical.xlsx')}
+                    onClick={() => onDemoFileLoad('products.xlsx')}
                     className="w-full text-left px-3 py-2 text-sm text-blue-700 hover:bg-blue-100 rounded-lg transition-colors"
                   >
-                    🏥 Medical Data (medical.xlsx)
+                    🏷️ Product Data (products.xlsx)
                   </button>
                 </div>
               </div>
@@ -96,10 +96,10 @@ const FileUpload = ({
                     📊 SDG Analysis Data (text.xlsx)
                   </button>
                   <button
-                    onClick={() => onDemoFileLoad('medical.xlsx')}
+                    onClick={() => onDemoFileLoad('products.xlsx')}
                     className="w-full text-left px-3 py-2 text-sm text-blue-700 hover:bg-blue-100 rounded-lg transition-colors"
                   >
-                    🏥 Medical Data (medical.xlsx)
+                    🏷️ Product Data (products.xlsx)
                   </button>
                 </div>
               </div>

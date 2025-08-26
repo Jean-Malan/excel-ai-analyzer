@@ -13,7 +13,7 @@ import SqlAnalysis from './pages/SqlAnalysis';
 const App = () => {
   // Tutorial modal
   const [showTutorialModal, setShowTutorialModal] = useState(false);
-
+  console.log('hello')
   return (
     <Router>
       <div className="min-h-screen bg-slate-50">
@@ -38,3 +38,4 @@ const App = () => {
 };
 
 export default App;
+

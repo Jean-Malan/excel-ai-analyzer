@@ -27,13 +27,21 @@ const DataPreview = ({
                   {headers.map((header, index) => (
                     <th
                       key={index}
-                      className={`px-2 sm:px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider border-r border-gray-200 min-w-[120px] ${
-                        selectedInputColumns.includes(index) ? 'bg-blue-100' : ''
+                      className={`px-2 sm:px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider border-r border-gray-200 min-w-[120px] relative ${
+                        selectedInputColumns.includes(index) ? 'bg-blue-50 border-blue-200' : ''
                       } ${
-                        parseInt(outputColumn) === index || (outputColumn === 'new' && index === headers.length - 1) ? 'bg-green-100' : ''
+                        parseInt(outputColumn) === index || (outputColumn === 'new' && index === headers.length - 1) ? 'bg-amber-50 border-amber-200' : ''
                       }`}
                     >
-                      {header || `Column ${index + 1}`}
+                      <div className="flex flex-col">
+                        <span>{header || `Column ${index + 1}`}</span>
+                        {selectedInputColumns.includes(index) && (
+                          <span className="text-xs text-blue-600 font-normal normal-case">Input Data</span>
+                        )}
+                        {(parseInt(outputColumn) === index || (outputColumn === 'new' && index === headers.length - 1)) && (
+                          <span className="text-xs text-amber-600 font-normal normal-case">AI Output</span>
+                        )}
+                      </div>
                     </th>
                   ))}
                 </tr>
@@ -45,11 +53,11 @@ const DataPreview = ({
                       <td
                         key={colIndex}
                         className={`px-2 sm:px-4 py-2 text-xs sm:text-sm text-gray-900 border-r border-gray-200 max-w-[150px] sm:max-w-xs truncate ${
-                          selectedInputColumns.includes(colIndex) ? 'bg-blue-50' : ''
+                          selectedInputColumns.includes(colIndex) ? 'bg-blue-50/50' : ''
                         } ${
-                          parseInt(outputColumn) === colIndex || (outputColumn === 'new' && colIndex === headers.length - 1) ? 'bg-green-50' : ''
+                          parseInt(outputColumn) === colIndex || (outputColumn === 'new' && colIndex === headers.length - 1) ? 'bg-amber-50/50' : ''
                         }`}
-                        title={row[colIndex]}
+                        title={String(row[colIndex] || '')}
                       >
                         {row[colIndex] || ''}
                       </td>

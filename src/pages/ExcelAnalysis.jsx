@@ -7,6 +7,7 @@ import * as XLSX from 'xlsx';
 import ProgressSteps from '../components/ProgressSteps';
 import FileUpload from '../components/FileUpload';
 import Configuration from '../components/Configuration';
+import StepByStepConfiguration, { StepNavigation } from '../components/StepByStepConfiguration';
 import ProcessingPanel from '../components/ProcessingPanel';
 import DataPreview from '../components/DataPreview';
 import PasteModal from '../components/PasteModal';
@@ -57,6 +58,9 @@ const ExcelAnalysis = () => {
   
   // Track if data was transferred for debugging
   const [dataTransferred, setDataTransferred] = useState(false);
+
+  // Active panel for step navigation
+  const [activePanel, setActivePanel] = useState(2);
 
   // Available demo files
   const demoFiles = [
@@ -390,6 +394,7 @@ const ExcelAnalysis = () => {
 
   const startProcessing = async (resumeFromRow = 0) => {
     // Special validation for Pure Dynamic Mode
+    debugger
     const isPureDynamicMode = dynamicCategoryOptions?.usePureDynamicMode;
     const hasValidPrompt = analysisPrompt || isPureDynamicMode;
     
@@ -422,78 +427,194 @@ const ExcelAnalysis = () => {
     }
 
     const updatedData = [...processedData];
+    
+    // Track discovered categories for sequential processing
+    let discoveredCategories = [];
 
-    for (let i = resumeFromRow; i < sheetData.length; i++) {
+    // BATCH PROCESSING: Process multiple rows at once instead of one by one
+    // Use sequential processing (batchSize = 1) for any category mode to allow category accumulation
+    const hasCategoryMode = dynamicCategoryOptions?.usePureDynamicMode || dynamicCategoryOptions?.enabled;
+    const batchSize = hasCategoryMode ? 1 : 8;
+    console.log('🚀 STARTING PROCESSING: batchSize =', batchSize, 'hasCategoryMode =', hasCategoryMode);
+    
+    for (let i = resumeFromRow; i < sheetData.length; i += batchSize) {
       if (isPaused) break;
 
-      try {
-        const row = sheetData[i];
-        const inputData = selectedInputColumns
-          .map(colIndex => `${headers[colIndex]}: ${row[colIndex] || ''}`)
-          .join('\n');
+      const batchEnd = Math.min(i + batchSize, sheetData.length);
+      const batch = sheetData.slice(i, batchEnd);
+      console.log('🚀 PROCESSING BATCH:', i, 'to', batchEnd - 1, '(', batch.length, 'rows)');
 
-        if (inputData.trim()) {
-          let result;
-          let cost;
-          
-          // Use dynamic categorization if Pure Dynamic Mode is enabled
-          if (dynamicCategoryOptions?.usePureDynamicMode) {
-            // For Pure Dynamic Mode, use the analysis prompt as the categorization instruction
-            const aiService = new (await import('../services/aiAnalysisService.js')).AIAnalysisService(apiKey, selectedModel);
-            
+      try {
+        if (batchSize > 1 && !hasCategoryMode) {
+          // BATCH PROCESSING - Process multiple rows in one API call
+          const batchInputData = batch.map((row, batchIndex) => {
+            const inputData = selectedInputColumns
+              .map(colIndex => `${headers[colIndex]}: ${row[colIndex] || ''}`)
+              .join('\n');
+            return `Row ${i + batchIndex + 1}:\n${inputData}`;
+          }).join('\n\n');
+
+          if (batchInputData.trim()) {
+            const batchPrompt = `Analyze these ${batch.length} rows and provide responses in the same order. Follow this format exactly:
+
+${batchInputData}
+
+Instructions: ${analysisPrompt}
+
+IMPORTANT: Return ONLY a JSON array with ${batch.length} elements, one for each row in the exact same order:
+["result for row 1", "result for row 2", "result for row 3", ...]`;
+
+            const batchResult = await callOpenAI(batchInputData, batchPrompt);
+            const batchCost = calculateCost(batchResult.usage, selectedModel);
+            const costPerBatchRow = {
+              input: batchCost.input / batch.length,
+              output: batchCost.output / batch.length,
+              cached: batchCost.cached / batch.length,
+              total: batchCost.total / batch.length
+            };
+
+            let batchResults;
             try {
-              const categorizationResult = await aiService.executeDynamicCategorization(
-                [inputData],
-                [],
-                'Excel Analysis',
-                null, // onStatsUpdate
-                dynamicCategoryOptions.onCategoryDiscovery, // onCategoryUpdate
-                analysisPrompt // userPrompt
-              );
-              
-              result = { 
-                content: categorizationResult.results[0]?.category || 'Unknown',
-                usage: { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0 } // Placeholder
-              };
-              cost = calculateCost(result.usage, selectedModel);
-            } catch (error) {
-              console.error('Dynamic categorization failed:', error);
-              // Fallback to regular OpenAI call
-              result = await callOpenAI(inputData, analysisPrompt);
-              cost = calculateCost(result.usage, selectedModel);
+              batchResults = JSON.parse(batchResult.content);
+              if (!Array.isArray(batchResults) || batchResults.length !== batch.length) {
+                throw new Error('Invalid batch response format');
+              }
+            } catch (parseError) {
+              console.warn('Failed to parse batch response, falling back to individual processing');
+              // Fallback to individual processing for this batch
+              batchResults = [];
+              for (let j = 0; j < batch.length; j++) {
+                const row = batch[j];
+                const inputData = selectedInputColumns
+                  .map(colIndex => `${headers[colIndex]}: ${row[colIndex] || ''}`)
+                  .join('\n');
+                const result = await callOpenAI(inputData, analysisPrompt);
+                batchResults.push(result.content);
+              }
             }
-          } else {
-            // Regular processing
-            result = await callOpenAI(inputData, analysisPrompt);
-            cost = calculateCost(result.usage, selectedModel);
+
+            // Process batch results
+            for (let j = 0; j < batch.length; j++) {
+              const rowIndex = i + j;
+              const result = { 
+                content: batchResults[j],
+                usage: {
+                  prompt_tokens: Math.round(batchResult.usage.prompt_tokens / batch.length),
+                  completion_tokens: Math.round(batchResult.usage.completion_tokens / batch.length),
+                  total_tokens: Math.round(batchResult.usage.total_tokens / batch.length)
+                }
+              };
+              const cost = calculateCost(result.usage, selectedModel);
+
+              // Ensure row has enough columns
+              while (updatedData[rowIndex].length <= outputColIndex) {
+                updatedData[rowIndex].push('');
+              }
+              
+              updatedData[rowIndex][outputColIndex] = result.content;
+              
+              // Update cost tracking
+              setCostPerRow(prev => [...prev, { row: rowIndex + 1, cost }]);
+              setTotalCost(prev => ({
+                input: prev.input + cost.input,
+                output: prev.output + cost.output,
+                cached: prev.cached + cost.cached,
+                total: prev.total + cost.total
+              }));
+            }
           }
-          
-          // Ensure row has enough columns
-          while (updatedData[i].length <= outputColIndex) {
-            updatedData[i].push('');
+        } else {
+          // INDIVIDUAL PROCESSING - Process each row separately (for dynamic categorization)
+          for (let j = 0; j < batch.length; j++) {
+            const rowIndex = i + j;
+            const row = batch[j];
+            const inputData = selectedInputColumns
+              .map(colIndex => `${headers[colIndex]}: ${row[colIndex] || ''}`)
+              .join('\n');
+
+            if (inputData.trim()) {
+              let result;
+              let cost;
+              
+              // Use dynamic categorization if any category mode is enabled
+              if (hasCategoryMode) {
+                // For Pure Dynamic Mode, use the analysis prompt as the categorization instruction
+                const aiService = new (await import('../services/aiAnalysisService.js')).AIAnalysisService(apiKey, selectedModel);
+                
+                try {
+                  // Create callback to capture new categories
+                  const categoryUpdateCallback = (categoryUpdate) => {
+                    console.log('🆕 CategoryUpdateCallback received:', categoryUpdate);
+                    // Extract allCategories from the callback object
+                    const allCats = categoryUpdate?.allCategories || [];
+                    const previousCount = discoveredCategories.length;
+                    discoveredCategories = [...allCats]; // Use all categories from CategoryManager
+                    console.log(`📝 Updated category list (${previousCount} -> ${discoveredCategories.length}):`, discoveredCategories);
+                    
+                    // Also call the original callback if it exists
+                    if (dynamicCategoryOptions.onCategoryDiscovery) {
+                      dynamicCategoryOptions.onCategoryDiscovery(categoryUpdate);
+                    }
+                  };
+                  
+                  console.log(`🏷️ Row ${rowIndex + 1}: Processing with ${discoveredCategories.length} existing categories:`, discoveredCategories);
+                  
+                  const categorizationResult = await aiService.executeDynamicCategorization(
+                    [inputData],
+                    discoveredCategories, // Pass accumulated categories
+                    'Excel Analysis',
+                    null, // onStatsUpdate
+                    categoryUpdateCallback, // Updated callback
+                    analysisPrompt // userPrompt
+                  );
+                  
+                  result = { 
+                    content: categorizationResult.results[0]?.category || 'Unknown',
+                    usage: { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0 } // Placeholder
+                  };
+                  cost = calculateCost(result.usage, selectedModel);
+                } catch (error) {
+                  console.error('Dynamic categorization failed:', error);
+                  // Fallback to regular OpenAI call
+                  result = await callOpenAI(inputData, analysisPrompt);
+                  cost = calculateCost(result.usage, selectedModel);
+                }
+              } else {
+                // Regular processing
+                result = await callOpenAI(inputData, analysisPrompt);
+                cost = calculateCost(result.usage, selectedModel);
+              }
+              
+              // Ensure row has enough columns
+              while (updatedData[rowIndex].length <= outputColIndex) {
+                updatedData[rowIndex].push('');
+              }
+              
+              updatedData[rowIndex][outputColIndex] = result.content;
+              
+              // Update cost tracking
+              setCostPerRow(prev => [...prev, { row: rowIndex + 1, cost }]);
+              setTotalCost(prev => ({
+                input: prev.input + cost.input,
+                output: prev.output + cost.output,
+                cached: prev.cached + cost.cached,
+                total: prev.total + cost.total
+              }));
+            }
           }
-          
-          updatedData[i][outputColIndex] = result.content;
-          
-          // Update cost tracking
-          setCostPerRow(prev => [...prev, { row: i + 1, cost }]);
-          setTotalCost(prev => ({
-            input: prev.input + cost.inputCost,
-            output: prev.output + cost.outputCost,
-            cached: prev.cached + cost.cachedCost,
-            total: prev.total + cost.totalCost
-          }));
         }
 
-        setProgress({ current: i + 1, total: sheetData.length });
+        setProgress({ current: batchEnd, total: sheetData.length });
         setProcessedData([...updatedData]);
 
-        // Rate limiting - wait 1 second between requests
+        // Rate limiting - wait 1 second between batches
         await new Promise(resolve => setTimeout(resolve, 1000));
         
       } catch (error) {
-        console.error(`Error processing row ${i + 1}:`, error);
-        setErrors(prev => [...prev, `Row ${i + 1}: ${error.message}`]);
+        console.error(`Error processing batch starting at row ${i + 1}:`, error);
+        for (let j = 0; j < batch.length; j++) {
+          setErrors(prev => [...prev, `Row ${i + j + 1}: ${error.message}`]);
+        }
       }
     }
 
@@ -671,28 +792,72 @@ const ExcelAnalysis = () => {
               onDemoFileLoad={import.meta.env.VITE_ENVIRONMENT === 'development' ? loadDemoFile : undefined}
             />
 
-            {/* Configuration */}
-            <Configuration
-              file={file}
-              apiKey={apiKey}
-              setApiKey={setApiKey}
-              selectedModel={selectedModel}
-              setSelectedModel={setSelectedModel}
-              headers={headers}
-              selectedInputColumns={selectedInputColumns}
-              onToggleColumnSelection={toggleColumnSelection}
-              outputColumn={outputColumn}
-              setOutputColumn={setOutputColumn}
-              customOutputColumn={customOutputColumn}
-              setCustomOutputColumn={setCustomOutputColumn}
-              analysisPrompt={analysisPrompt}
-              setAnalysisPrompt={setAnalysisPrompt}
-              dynamicCategoryOptions={dynamicCategoryOptions}
-              onDynamicCategoryChange={handleDynamicCategoryChange}
-            />
+            {/* Step 1: Welcome Message */}
+            {currentStep === 1 && !file && (
+              <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 text-center">
+                <div className="w-16 h-16 bg-blue-100 rounded-2xl flex items-center justify-center mx-auto mb-4">
+                  <svg className="w-8 h-8 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                  </svg>
+                </div>
+                <h2 className="text-xl font-semibold text-gray-900 mb-2">
+                  Get Started with AI Excel Analysis
+                </h2>
+                <p className="text-gray-600 mb-4">
+                  Upload your Excel file to begin. Our AI will help you analyze, categorize, and extract insights from your data.
+                </p>
+                <div className="text-sm text-gray-500">
+                  <p className="mb-2">✨ Perfect for:</p>
+                  <div className="flex flex-wrap justify-center gap-2">
+                    <span className="bg-gray-100 px-3 py-1 rounded-full">Sentiment Analysis</span>
+                    <span className="bg-gray-100 px-3 py-1 rounded-full">Data Categorization</span>
+                    <span className="bg-gray-100 px-3 py-1 rounded-full">Content Generation</span>
+                    <span className="bg-gray-100 px-3 py-1 rounded-full">Finding Duplicates</span>
+                  </div>
+                </div>
+              </div>
+            )}
 
-            {/* Processing Panel */}
-            <ProcessingPanel
+            {/* Step Navigation */}
+            {currentStep >= 2 && file && (
+              <StepNavigation
+                file={file}
+                apiKey={apiKey}
+                selectedInputColumns={selectedInputColumns}
+                outputColumn={outputColumn}
+                analysisPrompt={analysisPrompt}
+                dynamicCategoryOptions={dynamicCategoryOptions}
+                activePanel={activePanel}
+                setActivePanel={setActivePanel}
+              />
+            )}
+
+            
+            {/* Legacy Configuration (fallback) */}
+            {currentStep >= 2 && file && false && (
+              <Configuration
+                file={file}
+                apiKey={apiKey}
+                setApiKey={setApiKey}
+                selectedModel={selectedModel}
+                setSelectedModel={setSelectedModel}
+                headers={headers}
+                selectedInputColumns={selectedInputColumns}
+                onToggleColumnSelection={toggleColumnSelection}
+                outputColumn={outputColumn}
+                setOutputColumn={setOutputColumn}
+                customOutputColumn={customOutputColumn}
+                setCustomOutputColumn={setCustomOutputColumn}
+                analysisPrompt={analysisPrompt}
+                setAnalysisPrompt={setAnalysisPrompt}
+                dynamicCategoryOptions={dynamicCategoryOptions}
+                onDynamicCategoryChange={handleDynamicCategoryChange}
+              />
+            )}
+
+            {/* Processing Panel - Only show on step 3 */}
+            {currentStep >= 3 && (
+              <ProcessingPanel
               file={file}
               apiKey={apiKey}
               selectedInputColumns={selectedInputColumns}
@@ -713,11 +878,12 @@ const ExcelAnalysis = () => {
               selectedModel={selectedModel}
               dynamicCategoryOptions={dynamicCategoryOptions}
             />
+            )}
           </div>
 
           {/* Data Preview */}
           {(file || (import.meta.env.VITE_ENVIRONMENT === 'development' && sheetData.length > 0)) && (
-            <div className="xl:col-span-2">
+            <div className="xl:col-span-2 space-y-6">
               <DataPreview
                 sheetData={sheetData}
                 headers={headers}
@@ -725,6 +891,33 @@ const ExcelAnalysis = () => {
                 selectedInputColumns={selectedInputColumns}
                 outputColumn={outputColumn}
               />
+              
+              {/* Step Configuration Panels under the table */}
+              {currentStep >= 2 && (
+                <StepByStepConfiguration
+                  file={file}
+                  apiKey={apiKey}
+                  setApiKey={setApiKey}
+                  selectedModel={selectedModel}
+                  setSelectedModel={setSelectedModel}
+                  selectedInputColumns={selectedInputColumns}
+                  setSelectedInputColumns={setSelectedInputColumns}
+                  outputColumn={outputColumn}
+                  setOutputColumn={setOutputColumn}
+                  customOutputColumn={customOutputColumn}
+                  setCustomOutputColumn={setCustomOutputColumn}
+                  analysisPrompt={analysisPrompt}
+                  setAnalysisPrompt={setAnalysisPrompt}
+                  headers={headers}
+                  currentStep={currentStep}
+                  setCurrentStep={setCurrentStep}
+                  dynamicCategoryOptions={dynamicCategoryOptions}
+                  onDynamicCategoryChange={handleDynamicCategoryChange}
+                  onStartProcessing={startProcessing}
+                  activePanel={activePanel}
+                  setActivePanel={setActivePanel}
+                />
+              )}
             </div>
           )}
         </div>
