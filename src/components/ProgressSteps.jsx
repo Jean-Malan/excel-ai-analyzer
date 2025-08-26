@@ -16,8 +16,8 @@ const ProgressSteps = ({ currentStep }) => {
   ];
 
   return (
-    <div className="flex justify-center mb-6 sm:mb-8">
-      <div className="flex items-center justify-center max-w-full overflow-x-auto px-4">
+    <div className="flex justify-center -mt-4 mb-6 sm:mb-8">
+      {/* <div className="flex items-center justify-center max-w-full overflow-x-auto px-4">
         {steps.map(({ step, label, icon: Icon }) => (
           <div key={step} className="flex items-center flex-shrink-0">
             <div className="flex flex-col items-center">
@@ -43,7 +43,7 @@ const ProgressSteps = ({ currentStep }) => {
             {step < 4 && <div className="w-4 sm:w-8 h-0.5 bg-gray-300 mx-2 sm:mx-4" />}
           </div>
         ))}
-      </div>
+      </div> */}
     </div>
   );
 };

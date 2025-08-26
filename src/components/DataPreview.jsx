@@ -59,7 +59,19 @@ const DataPreview = ({
                         }`}
                         title={String(row[colIndex] || '')}
                       >
-                        {row[colIndex] || ''}
+                        {(() => {
+                          const cellValue = row[colIndex];
+                          if (cellValue === null || cellValue === undefined) {
+                            return '';
+                          }
+                          if (typeof cellValue === 'string' || typeof cellValue === 'number' || typeof cellValue === 'boolean') {
+                            return String(cellValue);
+                          }
+                          if (typeof cellValue === 'object') {
+                            return JSON.stringify(cellValue);
+                          }
+                          return String(cellValue);
+                        })()}
                       </td>
                     ))}
                   </tr>

@@ -2025,7 +2025,11 @@ const SqlAnalysis = () => {
                                 ? `${Math.round(value * 100)}%`
                                 : typeof value === 'number' 
                                   ? Math.round(value * 100) / 100
-                                  : value
+                                  : typeof value === 'string'
+                                    ? value
+                                    : typeof value === 'object'
+                                      ? JSON.stringify(value)
+                                      : String(value)
                               }
                             </p>
                             <p className="text-blue-600 text-xs capitalize">
@@ -2041,7 +2045,12 @@ const SqlAnalysis = () => {
                   {analysisResults.summary && (
                     <div className="bg-white/60 rounded-lg p-4 border border-blue-100">
                       <h4 className="font-semibold text-blue-800 mb-2">Summary</h4>
-                      <p className="text-blue-700">{analysisResults.summary}</p>
+                      <p className="text-blue-700">
+                        {typeof analysisResults.summary === 'string' 
+                          ? analysisResults.summary 
+                          : JSON.stringify(analysisResults.summary, null, 2)
+                        }
+                      </p>
                     </div>
                   )}
 
