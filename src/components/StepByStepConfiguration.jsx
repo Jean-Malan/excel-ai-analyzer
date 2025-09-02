@@ -53,8 +53,8 @@ export const StepNavigation = ({
   ];
 
   return (
-    <div className="bg-white rounded-xl border border-gray-200 p-6">
-      <h2 className="text-lg font-semibold text-gray-900 mb-6">Setup Progress</h2>
+    <div className="card p-5">
+      <h2 className="mb-4">Setup Progress</h2>
       <div className="space-y-3">
         {panels.map((panel) => {
           const Icon = panel.icon;
@@ -66,40 +66,26 @@ export const StepNavigation = ({
               key={panel.id}
               onClick={() => setActivePanel(panel.id)}
               disabled={!file && panel.id > 1}
-              className={`w-full flex items-center p-3 rounded-lg border transition-all duration-200 text-left ${
+              className={`w-full flex items-center p-3 rounded-lg border text-left transition-colors ${
                 isActive 
-                  ? 'border-blue-300 bg-blue-50' 
+                  ? 'bg-neutral-100 border-neutral-300' 
                   : isCompleted
-                  ? 'border-green-200 bg-green-50 hover:border-green-300'
-                  : 'border-gray-200 bg-gray-50 hover:border-gray-300'
+                  ? 'bg-white border-neutral-200'
+                  : 'bg-white border-neutral-200 hover:bg-neutral-50'
               } ${!file && panel.id > 1 ? 'opacity-50 cursor-not-allowed' : ''}`}
             >
-              <div className={`w-8 h-8 rounded-full flex items-center justify-center mr-3 ${
-                isCompleted ? 'bg-green-100' : isActive ? 'bg-blue-100' : 'bg-gray-100'
-              }`}>
-                {isCompleted ? (
-                  <Check className="w-4 h-4 text-green-600" />
-                ) : (
-                  <Icon className={`w-4 h-4 ${
-                    isActive ? 'text-blue-600' : 'text-gray-500'
-                  }`} />
-                )}
+              <div className={`w-8 h-8 rounded-md flex items-center justify-center mr-3 bg-neutral-100`}>
+                {isCompleted ? (<Check className="w-4 h-4 text-neutral-700" />) : (<Icon className="w-4 h-4 text-neutral-600" />)}
               </div>
               <div className="flex-1">
-                <div className={`text-sm font-medium ${
-                  isActive ? 'text-blue-900' : isCompleted ? 'text-green-900' : 'text-gray-600'
-                }`}>
+                <div className={`text-sm font-medium`}>
                   {panel.id}. {panel.title}
                 </div>
-                <div className="text-xs text-gray-500 mt-0.5">
+                <div className="text-xs muted mt-0.5">
                   {isCompleted ? 'Completed' : isActive ? 'In Progress' : 'Pending'}
                 </div>
               </div>
-              {isActive && (
-                <div className="text-blue-600">
-                  <ChevronRight className="w-4 h-4" />
-                </div>
-              )}
+              {isActive && (<ChevronRight className="w-4 h-4 text-neutral-700" />)}
             </button>
           );
         })}
@@ -295,16 +281,16 @@ const StepByStepConfiguration = ({
 
       {/* Panel 3: Input Columns */}
       {activePanel === 3 && canProceedToNext(3) && (
-        <div className="bg-white rounded-xl border border-gray-200 p-6">
+        <div className="card p-5">
           <div className="flex items-center mb-4">
-            <Database className="w-5 h-5 text-gray-600 mr-3" />
-            <h3 className="text-lg font-semibold text-gray-900">Select Input Columns</h3>
+            <Database className="w-4 h-4 text-neutral-700 mr-2" />
+            <h3>Select Input Columns</h3>
           </div>
           
           <div className="space-y-4">
-            <p className="text-gray-600">Choose which columns contain the data you want to analyze.</p>
+            <p className="muted">Choose which columns contain the data you want to analyze.</p>
             
-            <div className="max-h-64 overflow-y-auto border border-gray-200 rounded-lg p-4">
+            <div className="max-h-64 overflow-y-auto border border-neutral-200 rounded-lg p-4">
               <div className="space-y-3">
                 {headers.map((header, index) => (
                   <label key={index} className="flex items-center">
@@ -320,7 +306,7 @@ const StepByStepConfiguration = ({
                       }}
                       className="mr-3 accent-blue-500"
                     />
-                    <span className="text-sm text-gray-700">{header || `Column ${index + 1}`}</span>
+                    <span className="text-sm text-neutral-800">{header || `Column ${index + 1}`}</span>
                   </label>
                 ))}
               </div>
@@ -328,29 +314,20 @@ const StepByStepConfiguration = ({
 
             {/* Quick Actions */}
             <div className="flex gap-2">
-              <button
-                onClick={() => setSelectedInputColumns([...Array(headers.length).keys()])}
-                className="text-sm bg-gray-100 hover:bg-gray-200 text-gray-700 px-3 py-1.5 rounded-md transition-colors"
-              >
+              <button onClick={() => setSelectedInputColumns([...Array(headers.length).keys()])} className="btn">
                 Select All
               </button>
-              <button
-                onClick={() => setSelectedInputColumns([])}
-                className="text-sm bg-gray-100 hover:bg-gray-200 text-gray-700 px-3 py-1.5 rounded-md transition-colors"
-              >
+              <button onClick={() => setSelectedInputColumns([])} className="btn">
                 Clear All
               </button>
             </div>
 
             {selectedInputColumns.length > 0 && (
               <div className="pt-4">
-                <p className="text-sm text-green-600 mb-3">
+                <p className="text-sm text-neutral-700 mb-3">
                   ✓ Selected {selectedInputColumns.length} column{selectedInputColumns.length !== 1 ? 's' : ''} for analysis
                 </p>
-                <button
-                  onClick={() => setActivePanel(4)}
-                  className="w-full bg-blue-600 hover:bg-blue-700 text-white py-2 px-4 rounded-lg font-medium transition-colors flex items-center justify-center"
-                >
+                <button onClick={() => setActivePanel(4)} className="btn-primary w-full flex items-center justify-center">
                   Continue to Output Column
                   <ChevronRight className="w-4 h-4 ml-2" />
                 </button>
@@ -362,23 +339,23 @@ const StepByStepConfiguration = ({
 
       {/* Panel 4: Output Column */}
       {activePanel === 4 && canProceedToNext(4) && (
-        <div className="bg-white rounded-xl border border-gray-200 p-6">
+        <div className="card p-5">
           <div className="flex items-center mb-4">
-            <Target className="w-5 h-5 text-gray-600 mr-3" />
-            <h3 className="text-lg font-semibold text-gray-900">Choose Output Column</h3>
+            <Target className="w-4 h-4 text-neutral-700 mr-2" />
+            <h3>Choose Output Column</h3>
           </div>
           
           <div className="space-y-4">
-            <p className="text-gray-600">Where should the AI analysis results be placed?</p>
+            <p className="muted">Where should the AI analysis results be placed?</p>
             
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
+              <label className="block text-sm font-medium text-neutral-700 mb-2">
                 Output Destination
               </label>
               <select
                 value={outputColumn}
                 onChange={(e) => setOutputColumn(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                className="field"
               >
                 <option value="">Select destination...</option>
                 <option value="new">Create new column</option>
@@ -392,7 +369,7 @@ const StepByStepConfiguration = ({
 
             {outputColumn === 'new' && (
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
+                <label className="block text-sm font-medium text-neutral-700 mb-2">
                   New Column Name
                 </label>
                 <input
@@ -400,16 +377,13 @@ const StepByStepConfiguration = ({
                   value={customOutputColumn}
                   onChange={(e) => setCustomOutputColumn(e.target.value)}
                   placeholder="e.g., AI Analysis, Category, Sentiment"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  className="field"
                 />
               </div>
             )}
 
             {outputColumn && (
-              <button
-                onClick={() => setActivePanel(5)}
-                className="w-full bg-blue-600 hover:bg-blue-700 text-white py-2 px-4 rounded-lg font-medium transition-colors flex items-center justify-center"
-              >
+              <button onClick={() => setActivePanel(5)} className="btn-primary w-full flex items-center justify-center">
                 Continue to Categories
                 <ChevronRight className="w-4 h-4 ml-2" />
               </button>
@@ -420,18 +394,18 @@ const StepByStepConfiguration = ({
 
       {/* Panel 5: Category Analysis */}
       {activePanel === 5 && canProceedToNext(5) && (
-        <div className="bg-white rounded-xl border border-gray-200 p-6">
+        <div className="card p-5">
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center">
-              <List className="w-5 h-5 text-gray-600 mr-3" />
+              <List className="w-4 h-4 text-neutral-700 mr-2" />
               <div>
-                <h3 className="text-lg font-semibold text-gray-900">Category Analysis</h3>
-                <p className="text-sm text-gray-500">Configure categories for your data (optional)</p>
+                <h3>Category Analysis</h3>
+                <p className="text-sm muted">Configure categories for your data (optional)</p>
               </div>
             </div>
             <button
               onClick={() => setActivePanel(6)}
-              className="text-blue-600 hover:text-blue-800 text-sm font-medium"
+              className="btn-ghost text-sm"
             >
               Skip →
             </button>
@@ -444,10 +418,10 @@ const StepByStepConfiguration = ({
             setAnalysisPrompt={setAnalysisPrompt}
           />
 
-          <div className="mt-4 pt-4 border-t border-gray-200">
+          <div className="mt-4 pt-4 border-t border-neutral-200">
             <button
               onClick={() => setActivePanel(6)}
-              className="w-full bg-blue-600 hover:bg-blue-700 text-white py-2 px-4 rounded-lg font-medium transition-colors flex items-center justify-center"
+              className="btn-primary w-full flex items-center justify-center"
             >
               Continue to Analysis Prompt
               <ChevronRight className="w-4 h-4 ml-2" />
@@ -458,17 +432,17 @@ const StepByStepConfiguration = ({
 
       {/* Panel 6: Analysis Prompt & Submit */}
       {activePanel === 6 && canProceedToNext(6) && (
-        <div className="bg-white rounded-xl border border-gray-200 p-6">
+        <div className="card p-5">
           <div className="flex items-center mb-4">
-            <MessageSquare className="w-5 h-5 text-gray-600 mr-3" />
-            <h3 className="text-lg font-semibold text-gray-900">Analysis Instructions</h3>
+            <MessageSquare className="w-4 h-4 text-neutral-700 mr-2" />
+            <h3>Analysis Instructions</h3>
           </div>
           
           <div className="space-y-4">
-            <p className="text-gray-600">Tell the AI what kind of analysis you want to perform on your data.</p>
+            <p className="muted">Tell the AI what kind of analysis you want to perform on your data.</p>
             
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
+              <label className="block text-sm font-medium text-neutral-700 mb-2">
                 What should the AI analyze? *
               </label>
               <textarea
@@ -476,30 +450,21 @@ const StepByStepConfiguration = ({
                 onChange={(e) => setAnalysisPrompt(e.target.value)}
                 placeholder="e.g., Find duplicate emails, Categorize feedback as positive/negative/neutral, Extract key insights from comments..."
                 rows={4}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                className="field"
               />
             </div>
 
             {/* Quick Examples */}
             <div>
-              <p className="text-sm font-medium text-gray-700 mb-2">Quick examples:</p>
+              <p className="text-sm font-medium text-neutral-700 mb-2">Quick examples:</p>
               <div className="flex flex-wrap gap-2">
-                <button
-                  onClick={() => setAnalysisPrompt("Find all duplicate emails")}
-                  className="text-xs bg-blue-100 hover:bg-blue-200 text-blue-800 px-3 py-1.5 rounded-full transition-colors"
-                >
+                <button onClick={() => setAnalysisPrompt("Find all duplicate emails")} className="btn-pill">
                   Find duplicates
                 </button>
-                <button
-                  onClick={() => setAnalysisPrompt("Categorize this data into meaningful groups")}
-                  className="text-xs bg-blue-100 hover:bg-blue-200 text-blue-800 px-3 py-1.5 rounded-full transition-colors"
-                >
+                <button onClick={() => setAnalysisPrompt("Categorize this data into meaningful groups")} className="btn-pill">
                   Categorize
                 </button>
-                <button
-                  onClick={() => setAnalysisPrompt("Extract key insights and patterns")}
-                  className="text-xs bg-blue-100 hover:bg-blue-200 text-blue-800 px-3 py-1.5 rounded-full transition-colors"
-                >
+                <button onClick={() => setAnalysisPrompt("Extract key insights and patterns")} className="btn-pill">
                   Extract insights
                 </button>
               </div>
@@ -507,30 +472,24 @@ const StepByStepConfiguration = ({
 
             {/* Final Submit */}
             {allRequiredCompleted ? (
-              <div className="pt-4 border-t border-gray-200">
-                <div className="bg-green-50 border border-green-200 rounded-lg p-4 mb-4">
-                  <div className="flex items-center text-green-800">
-                    <Check className="w-5 h-5 mr-2" />
+              <div className="pt-4 border-t border-neutral-200">
+                <div className="card-muted p-4 mb-4">
+                  <div className="flex items-center">
+                    <Check className="w-4 h-4 mr-2 text-neutral-700" />
                     <span className="font-medium">Ready to analyze!</span>
                   </div>
-                  <p className="text-sm text-green-700 mt-1">
+                  <p className="text-sm muted mt-1">
                     All required fields completed. Click below to start processing your data.
                   </p>
                 </div>
-                <button
-                  onClick={() => {
-                    setCurrentStep(3);
-                    onStartProcessing();
-                  }}
-                  className="w-full bg-green-600 hover:bg-green-700 text-white py-3 px-6 rounded-lg font-medium transition-colors flex items-center justify-center"
-                >
+                <button onClick={() => { setCurrentStep(3); onStartProcessing(); }} className="btn-primary w-full flex items-center justify-center py-3">
                   Start AI Analysis
                   <ChevronRight className="w-4 h-4 ml-2" />
                 </button>
               </div>
             ) : (
-              <div className="pt-4 border-t border-gray-200">
-                <div className="text-center text-gray-500">
+              <div className="pt-4 border-t border-neutral-200">
+                <div className="text-center muted">
                   <p className="text-sm">Please complete all required fields to continue</p>
                 </div>
               </div>

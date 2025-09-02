@@ -16,8 +16,8 @@ const App = () => {
   console.log('hello')
   return (
     <Router>
-      <div className="min-h-screen bg-slate-50">
-        <div className="max-w-7xl mx-auto p-3 sm:p-6">
+      <div className="min-h-screen">
+        <div className="max-w-6xl mx-auto p-4 sm:p-6">
           <Navigation onShowTutorial={() => setShowTutorialModal(true)} />
           
           <Routes>
@@ -38,4 +38,3 @@ const App = () => {
 };
 
 export default App;
-
