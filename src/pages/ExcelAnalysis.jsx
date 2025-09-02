@@ -25,7 +25,7 @@ const ExcelAnalysis = () => {
   
   // Configuration
   const [apiKey, setApiKey] = useState('');
-  const [selectedModel, setSelectedModel] = useState('gpt-4o-mini-2024-07-18');
+  const [selectedModel, setSelectedModel] = useState('gpt-5-nano-2025-08-07');
   const [selectedInputColumns, setSelectedInputColumns] = useState([]);
   const [outputColumn, setOutputColumn] = useState('');
   const [analysisPrompt, setAnalysisPrompt] = useState('');
@@ -688,7 +688,7 @@ IMPORTANT: Return ONLY a JSON array with ${batch.length} elements, one for each 
     setOutputColumn('');
     setAnalysisPrompt('');
     setCustomOutputColumn('');
-    setSelectedModel('gpt-4o-mini-2024-07-18');
+    setSelectedModel('gpt-5-nano-2025-08-07');
     setIsProcessing(false);
     setIsPaused(false);
     setProgress({ current: 0, total: 0 });

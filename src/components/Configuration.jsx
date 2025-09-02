@@ -303,11 +303,8 @@ Return only the category name exactly as listed above. Choose the single best ma
               onChange={(e) => setSelectedModel(e.target.value)}
               className="w-full px-4 py-3 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-violet-500 focus:border-transparent transition-all duration-200 bg-white/50"
             >
-              <option value="gpt-4o-mini-2024-07-18">4o-mini (Fastest)</option>
               <option value="gpt-5-nano-2025-08-07">GPT-5 Nano (Most Affordable)</option>
               <option value="gpt-5-mini-2025-08-07">GPT-5 Mini (Balanced)</option>
-              <option value="o4-mini-2025-04-16">o4-mini (Advanced Reasoning)</option>
-              <option value="gpt-4.1-2025-04-14">GPT-4.1 (Most Capable)</option>
             </select>
             <div className="flex items-center justify-between mt-1">
               <p className="text-xs text-gray-500">

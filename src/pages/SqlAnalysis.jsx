@@ -34,7 +34,7 @@ const SqlAnalysis = () => {
   
   // Analysis state
   const [apiKey, setApiKey] = useState('');
-  const [selectedModel, setSelectedModel] = useState('gpt-4o-mini-2024-07-18');
+  const [selectedModel, setSelectedModel] = useState('gpt-5-nano-2025-08-07');
   const [userQuestion, setUserQuestion] = useState('');
   const [generatedQuery, setGeneratedQuery] = useState('');
   const [queryResults, setQueryResults] = useState([]);
@@ -961,7 +961,7 @@ const SqlAnalysis = () => {
     setSchema([]);
     setIsDbReady(false);
     setApiKey('');
-    setSelectedModel('gpt-4o-mini-2024-07-18');
+    setSelectedModel('gpt-5-nano-2025-08-07');
     setUserQuestion('');
     setGeneratedQuery('');
     setQueryResults([]);
@@ -1321,11 +1321,8 @@ const SqlAnalysis = () => {
   }, [addLog]);
 
   const models = [
-    { id: 'gpt-4o-mini-2024-07-18', name: '4o-mini (Fastest)', cost: '$0.60/1M' },
     { id: 'gpt-5-nano-2025-08-07', name: 'GPT-5 Nano (Most Affordable)', cost: '$0.05/1M' },
-    { id: 'gpt-5-mini-2025-08-07', name: 'GPT-5 Mini (Balanced)', cost: '$0.25/1M' },
-    { id: 'o4-mini-2025-04-16', name: 'o4-mini (Advanced Reasoning)', cost: '$1.10/1M' },
-    { id: 'gpt-4.1-2025-04-14', name: 'GPT-4.1 (Most Capable)', cost: '$2.00/1M' }
+    { id: 'gpt-5-mini-2025-08-07', name: 'GPT-5 Mini (Balanced)', cost: '$0.25/1M' }
   ];
 
   return (
